@@ -15,7 +15,7 @@ A September 2026 PYMNTS survey found **93% of merchants think AI or agent provid
 ## 2. Core Architecture: Three Mechanisms
 
 ```
-[ User Prompt ] 
+[ User Prompt ]
       │
       ▼
 [ Mandate Parser (LLM + Zod) ] ──► [ User Confirmation ]
@@ -64,10 +64,12 @@ A September 2026 PYMNTS survey found **93% of merchants think AI or agent provid
 ## 3. Quickstart & Setup on Windows
 
 ### Prerequisites
+
 - Node.js 20 LTS or higher (`node -v`)
 - Windows Command Prompt (`cmd.exe`) or PowerShell
 
 ### Installation
+
 ```cmd
 cd /d D:\whatever
 npm install
@@ -75,6 +77,7 @@ npm run build --workspace=shared
 ```
 
 ### Verification Checks
+
 ```cmd
 npm run doctor
 npm test
@@ -82,9 +85,11 @@ npm run scenario
 ```
 
 ### Running the Application
+
 ```cmd
 npm run dev
 ```
+
 - **Web UI:** http://localhost:5173
 - **Backend API:** http://localhost:3000
 
@@ -94,19 +99,19 @@ npm run dev
 
 Copy `.env.example` to `.env`:
 
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `PAYPAL_MODE` | PayPal integration mode: `sandbox` or `mock` | `sandbox` |
-| `PAYPAL_BASE_URL` | Base API endpoint (refuses live URLs) | `https://api-m.sandbox.paypal.com` |
-| `PAYPAL_CLIENT_ID` | PayPal Sandbox merchant App Client ID | *(from developer.paypal.com)* |
-| `PAYPAL_CLIENT_SECRET` | PayPal Sandbox merchant App Secret | *(from developer.paypal.com)* |
-| `PAYPAL_WEBHOOK_ID` | Optional webhook ID for signature verification | *(empty)* |
-| `LLM_PROVIDER` | AI provider: `gemini`, `ollama`, or `mock` | `gemini` |
-| `GEMINI_API_KEY` | Google AI Studio free-tier API Key | *(empty)* |
-| `GEMINI_MODEL` | Gemini model ID | `gemini-1.5-flash` |
-| `DISPUTE_MODE` | Dispute handling mode: `simulated` or `sandbox` | `simulated` |
-| `DATABASE_PATH` | Path to embedded SQLite database | `data/agentledger.db` |
-| `KEYS_DIR` | Directory storing Ed25519 keypair | `data/keys` |
+| Variable               | Description                                     | Default                            |
+| :--------------------- | :---------------------------------------------- | :--------------------------------- |
+| `PAYPAL_MODE`          | PayPal integration mode: `sandbox` or `mock`    | `sandbox`                          |
+| `PAYPAL_BASE_URL`      | Base API endpoint (refuses live URLs)           | `https://api-m.sandbox.paypal.com` |
+| `PAYPAL_CLIENT_ID`     | PayPal Sandbox merchant App Client ID           | _(from developer.paypal.com)_      |
+| `PAYPAL_CLIENT_SECRET` | PayPal Sandbox merchant App Secret              | _(from developer.paypal.com)_      |
+| `PAYPAL_WEBHOOK_ID`    | Optional webhook ID for signature verification  | _(empty)_                          |
+| `LLM_PROVIDER`         | AI provider: `gemini`, `ollama`, or `mock`      | `gemini`                           |
+| `GEMINI_API_KEY`       | Google AI Studio free-tier API Key              | _(empty)_                          |
+| `GEMINI_MODEL`         | Gemini model ID                                 | `gemini-3.6-flash`                 |
+| `DISPUTE_MODE`         | Dispute handling mode: `simulated` or `sandbox` | `simulated`                        |
+| `DATABASE_PATH`        | Path to embedded SQLite database                | `data/agentledger.db`              |
+| `KEYS_DIR`             | Directory storing Ed25519 keypair               | `data/keys`                        |
 
 ---
 
@@ -131,4 +136,5 @@ Press **`D`** on any screen or navigate with the interactive demo drawer:
 ---
 
 ## License
+
 MIT License - Copyright (c) 2026 JacxJ / AgentLedger
