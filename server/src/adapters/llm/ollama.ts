@@ -16,6 +16,10 @@ export class OllamaLLMAdapter implements LLMPort {
     this.model = model;
   }
 
+  isFallbackActive(): boolean {
+    return false;
+  }
+
   async generateStructured<T>(
     prompt: string,
     schema: z.ZodType<T>,

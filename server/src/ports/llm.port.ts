@@ -6,4 +6,5 @@ export interface LLMPort {
     schema: z.ZodType<T>,
     systemInstruction?: string
   ): Promise<T>;
+  isFallbackActive?(): boolean;
 }

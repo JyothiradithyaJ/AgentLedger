@@ -17,6 +17,15 @@ export const createMandatesRouter = (container: Container): Router => {
       const result = await mandates.parsePrompt(parsed.prompt);
       res.json(result);
     } catch (err) {
+      if (err instanceof Error && err.message === "Could not understand the request") {
+        res.status(422).json({
+          error: {
+            code: "MANDATE_PARSE_FAILED",
+            message: "Could not understand the request"
+          }
+        });
+        return;
+      }
       next(err);
     }
   });
@@ -66,6 +75,15 @@ export const createMandatesRouter = (container: Container): Router => {
       const authorized = await mandates.authorizeMandate(req.params.id);
       res.json(authorized);
     } catch (err) {
+      if (err instanceof Error && err.message === "ORDER_NOT_APPROVED") {
+        res.status(409).json({
+          error: {
+            code: "ORDER_NOT_APPROVED",
+            message: "Buyer has not approved the PayPal order yet"
+          }
+        });
+        return;
+      }
       next(err);
     }
   });
@@ -84,8 +102,21 @@ export const createMandatesRouter = (container: Container): Router => {
   router.post("/:id/runs", async (req, res, next) => {
     try {
       const mandateId = req.params.id;
-      const scenario = req.body.scenario as "A" | "B" | "C" | "D" | "E" | undefined;
-      const bypass = Boolean(req.body.bypassReferee);
+      let scenario: "A" | "B" | "C" | "D" | "E" | undefined;
+      if (typeof req.body === "object" && req.body !== null) {
+        const rawScenario = Reflect.get(req.body, "scenario");
+        if (
+          rawScenario === "A" ||
+          rawScenario === "B" ||
+          rawScenario === "C" ||
+          rawScenario === "D" ||
+          rawScenario === "E"
+        ) {
+          scenario = rawScenario;
+        }
+      }
+      const rawBypass = typeof req.body === "object" && req.body !== null ? Reflect.get(req.body, "bypassReferee") : undefined;
+      const bypass = Boolean(rawBypass);
 
       // Async execution with timeline events broadcasting over SSE
       const runPromise = purchases.executeAgentRun(
@@ -104,6 +135,61 @@ export const createMandatesRouter = (container: Container): Router => {
         purchaseId: result.purchase.id
       });
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("MANDATE_ALREADY_CAPTURED") || msg.includes("already been captured")) {
+        res.status(409).json({
+          error: {
+            code: "MANDATE_ALREADY_CAPTURED",
+            message: "This mandate's hold has already been captured. Create a new mandate."
+          }
+        });
+        return;
+      }
+      if (msg.includes("AUTHORIZATION_ALREADY_CAPTURED")) {
+        res.status(409).json({
+          error: {
+            code: "AUTHORIZATION_ALREADY_CAPTURED",
+            message: "This authorization has already been captured."
+          }
+        });
+        return;
+      }
+      if (msg.includes("ORDER_NOT_APPROVED")) {
+        res.status(409).json({
+          error: {
+            code: "ORDER_NOT_APPROVED",
+            message: "Buyer has not approved the PayPal order yet"
+          }
+        });
+        return;
+      }
+      if (msg.includes("AUTHORIZATION_VOIDED")) {
+        res.status(409).json({
+          error: {
+            code: "AUTHORIZATION_VOIDED",
+            message: "This authorization has been voided and cannot be captured."
+          }
+        });
+        return;
+      }
+      if (msg.includes("MAX_NUMBER_OF_PAYMENT_ATTEMPTS_EXCEEDED")) {
+        res.status(422).json({
+          error: {
+            code: "MAX_NUMBER_OF_PAYMENT_ATTEMPTS_EXCEEDED",
+            message: "Maximum number of payment attempts exceeded for this authorization."
+          }
+        });
+        return;
+      }
+      if (msg.includes("PAYMENT_DENIED")) {
+        res.status(422).json({
+          error: {
+            code: "PAYMENT_DENIED",
+            message: "Payment was denied by PayPal."
+          }
+        });
+        return;
+      }
       next(err);
     }
   });

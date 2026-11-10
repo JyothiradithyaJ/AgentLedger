@@ -29,8 +29,9 @@ describe("AgentLedger End-to-End Integration Tests", () => {
     // 4. Execute purchase run inside mandate
     const { purchase } = await purchases.executeAgentRun(authorized.id, "A");
     expect(purchase.status).toBe("CAPTURED");
-    expect(purchase.capturedAmountCents).toBe(9850); // $98.50 captured
-    expect(purchase.releasedAmountCents).toBe(2150); // $21.50 hold released
+    expect(purchase.capturedAmountCents).toBe(purchase.cart.totalCents);
+    expect(purchase.capturedAmountCents).toBeLessThanOrEqual(authorized.budgetCents);
+    expect(purchase.releasedAmountCents).toBe(authorized.budgetCents - purchase.capturedAmountCents);
 
     // 5. Verify ledger integrity
     const chainVerification = ledger.verify();

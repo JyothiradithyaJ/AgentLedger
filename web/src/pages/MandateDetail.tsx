@@ -45,11 +45,12 @@ export const MandateDetailPage: React.FC = () => {
       await apiClient.revokeMandate(mandate.id);
       showToast("Agent revoked. Remaining hold voided on PayPal rail.", "success");
       refetch();
-    } catch {
-      showToast("Error revoking mandate hold", "error");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Error revoking mandate hold", "error");
     }
   };
 
+  const isClosed = mandate.status === "COMPLETED" || (mandate.capturedCents > 0 && mandate.heldCents === 0);
   const mandateEvents = ledger.filter((e) => e.mandateId === mandate.id);
 
   return (
@@ -59,7 +60,7 @@ export const MandateDetailPage: React.FC = () => {
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <h1 style={{ fontSize: "1.4rem" }}>{mandate.description}</h1>
-            <span className={`badge ${mandate.status === "ACTIVE" ? "badge-pass" : mandate.status === "REVOKED" ? "badge-fail" : "badge-info"}`}>
+            <span className={`badge ${mandate.status === "ACTIVE" ? "badge-pass" : mandate.status === "REVOKED" ? "badge-fail" : mandate.status === "COMPLETED" ? "badge-info" : "badge-info"}`}>
               {mandate.status}
             </span>
           </div>
@@ -68,18 +69,31 @@ export const MandateDetailPage: React.FC = () => {
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "12px" }}>
-          {mandate.status === "ACTIVE" && (
-            <>
-              <button onClick={handleStartRun} disabled={running} className="btn btn-primary">
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }}>
+          <div style={{ display: "flex", gap: "12px" }}>
+            {mandate.status === "ACTIVE" && !isClosed && (
+              <>
+                <button onClick={handleStartRun} disabled={running} className="btn btn-primary">
+                  <Play size={16} />
+                  <span>{running ? "Launching Agent..." : "Run Shopping Agent"}</span>
+                </button>
+                <button onClick={handleRevoke} className="btn btn-danger">
+                  <AlertTriangle size={16} />
+                  <span>Revoke Hold</span>
+                </button>
+              </>
+            )}
+            {isClosed && (
+              <button disabled className="btn btn-primary" style={{ opacity: 0.5, cursor: "not-allowed" }}>
                 <Play size={16} />
-                <span>{running ? "Launching Agent..." : "Run Shopping Agent"}</span>
+                <span>Run Shopping Agent</span>
               </button>
-              <button onClick={handleRevoke} className="btn btn-danger">
-                <AlertTriangle size={16} />
-                <span>Revoke Hold</span>
-              </button>
-            </>
+            )}
+          </div>
+          {isClosed && (
+            <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", margin: 0 }}>
+              This mandate&apos;s hold has already been captured. Create a new mandate.
+            </p>
           )}
         </div>
       </div>

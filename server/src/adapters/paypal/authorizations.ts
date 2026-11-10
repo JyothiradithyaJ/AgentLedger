@@ -1,5 +1,5 @@
 import type { PayPalClient } from "./client.js";
-import type { AuthorizeResult, CaptureResult } from "../../ports/paypal.port.js";
+import type { AuthorizeResult, AuthorizationDetails, CaptureResult } from "../../ports/paypal.port.js";
 
 interface PayPalAuthorizeOrderResponse {
   id: string;
@@ -15,11 +15,34 @@ interface PayPalAuthorizeOrderResponse {
 }
 
 interface PayPalCaptureResponse {
-  id: string;
-  status: string;
-  amount: {
-    value: string;
-    currency_code: string;
+  id?: string;
+  status?: string;
+  amount?: {
+    value?: string;
+    currency_code?: string;
+  };
+  seller_receivable_breakdown?: {
+    gross_amount?: {
+      value?: string;
+      currency_code?: string;
+    };
+    paypal_fee?: {
+      value?: string;
+      currency_code?: string;
+    };
+    net_amount?: {
+      value?: string;
+      currency_code?: string;
+    };
+  };
+}
+
+interface PayPalGetAuthResponse {
+  id?: string;
+  status?: string;
+  amount?: {
+    value?: string;
+    currency_code?: string;
   };
 }
 
@@ -43,6 +66,37 @@ export const authorizeOrder = async (
   return {
     authorizationId: auth.id,
     status: auth.status
+  };
+};
+
+export const getAuthorization = async (
+  client: PayPalClient,
+  authorizationId: string
+): Promise<AuthorizationDetails> => {
+  const response = await client.request<PayPalGetAuthResponse>(
+    `/v2/payments/authorizations/${authorizationId}`,
+    {
+      method: "GET"
+    }
+  );
+
+  if (!response || typeof response !== "object" || !response.id || !response.status) {
+    throw new Error(`PayPal getAuthorization response missing required fields for ${authorizationId}`);
+  }
+
+  let amountCents = 0;
+  const rawValue = response.amount?.value;
+  if (rawValue !== undefined) {
+    const parsed = parseFloat(rawValue);
+    if (!Number.isNaN(parsed)) {
+      amountCents = Math.round(parsed * 100);
+    }
+  }
+
+  return {
+    authorizationId: response.id,
+    status: response.status,
+    amountCents
   };
 };
 
@@ -73,12 +127,53 @@ export const captureAuthorization = async (
     }
   );
 
-  const capturedCents = Math.round(parseFloat(response.amount.value) * 100);
+  if (!response || typeof response !== "object") {
+    throw new Error(`PayPal capture response invalid for authorization ${authorizationId}`);
+  }
+
+  const captureId = response.id;
+  const status = response.status;
+  if (!captureId || !status) {
+    throw new Error(`PayPal capture response missing required id or status for authorization ${authorizationId}`);
+  }
+
+  if (status !== "COMPLETED" && status !== "PENDING") {
+    throw new Error(`PayPal capture returned non-success status: ${status}`);
+  }
+
+  let capturedCents = amountCents;
+  const rawCapturedValue = response.amount?.value;
+  if (rawCapturedValue !== undefined) {
+    const parsed = parseFloat(rawCapturedValue);
+    if (!Number.isNaN(parsed)) {
+      capturedCents = Math.round(parsed * 100);
+    }
+  }
+
+  let feeCents: number | undefined;
+  const rawFee = response.seller_receivable_breakdown?.paypal_fee?.value;
+  if (rawFee !== undefined) {
+    const parsedFee = parseFloat(rawFee);
+    if (!Number.isNaN(parsedFee)) {
+      feeCents = Math.round(parsedFee * 100);
+    }
+  }
+
+  let netCents: number | undefined;
+  const rawNet = response.seller_receivable_breakdown?.net_amount?.value;
+  if (rawNet !== undefined) {
+    const parsedNet = parseFloat(rawNet);
+    if (!Number.isNaN(parsedNet)) {
+      netCents = Math.round(parsedNet * 100);
+    }
+  }
 
   return {
-    captureId: response.id,
-    status: response.status,
-    capturedCents
+    captureId,
+    status,
+    capturedCents,
+    ...(feeCents !== undefined ? { feeCents } : {}),
+    ...(netCents !== undefined ? { netCents } : {})
   };
 };
 

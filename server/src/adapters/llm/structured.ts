@@ -9,11 +9,12 @@ export const generateStructuredJson = async <T>(
   circuitBreaker: CircuitBreaker,
   prompt: string,
   schema: z.ZodType<T>,
-  systemInstruction?: string
+  systemInstruction?: string,
+  onFallback?: () => void
 ): Promise<T> => {
-  // Check circuit breaker first
   if (circuitBreaker.isOpen()) {
     logger.warn("Circuit breaker is OPEN. Falling back to deterministic mock LLM provider.");
+    onFallback?.();
     return fallback.generateStructured(prompt, schema, systemInstruction);
   }
 
@@ -22,9 +23,18 @@ export const generateStructuredJson = async <T>(
     circuitBreaker.recordSuccess();
     return result;
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const isQuotaOrUnavailable = msg.includes("429") || msg.includes("503");
+
+    if (isQuotaOrUnavailable) {
+      circuitBreaker.recordFailure();
+      logger.warn({ err, msg }, "Primary LLM failed with 429/503. Skipping repair retry and routing directly to fallback.");
+      onFallback?.();
+      return fallback.generateStructured(prompt, schema, systemInstruction);
+    }
+
     logger.warn({ err }, "Initial structured LLM generation failed. Attempting one repair retry...");
 
-    // One repair retry with explicit correction hint
     const repairPrompt = `${prompt}\n\nIMPORTANT: The previous output failed schema validation. Output ONLY valid JSON adhering strictly to the requested schema.`;
     try {
       const repaired = await primary.generateStructured(repairPrompt, schema, systemInstruction);
@@ -33,6 +43,7 @@ export const generateStructuredJson = async <T>(
     } catch (retryErr) {
       circuitBreaker.recordFailure();
       logger.error({ retryErr }, "LLM repair retry failed. Falling back to deterministic mock provider.");
+      onFallback?.();
       return fallback.generateStructured(prompt, schema, systemInstruction);
     }
   }

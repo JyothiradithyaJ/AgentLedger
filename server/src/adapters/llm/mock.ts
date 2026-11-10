@@ -3,6 +3,10 @@ import type { LLMPort } from "../../ports/llm.port.js";
 import { logger } from "../../observability/logger.js";
 
 export class MockLLMAdapter implements LLMPort {
+  isFallbackActive(): boolean {
+    return true;
+  }
+
   async generateStructured<T>(
     prompt: string,
     schema: z.ZodType<T>,
@@ -47,7 +51,7 @@ export class MockLLMAdapter implements LLMPort {
 
     // 2. Referee Semantic Intent Check Mock
     if (p.includes("proposed cart:") || p.includes("user's intent")) {
-      if (p.includes("resole outlet") || p.includes("merchant: \"resole")) {
+      if (p.includes("merchant: \"resole outlet\"") || p.includes("merchant: \"resole")) {
         const mockResult = {
           matches_intent: false,
           confidence: 0.95,
@@ -66,16 +70,31 @@ export class MockLLMAdapter implements LLMPort {
 
     // 3. Mandate Parsing Mock
     if (p.includes("spending mandate") || p.includes("shopping request") || p.includes("parse")) {
+      const colors = [
+        "red", "blue", "black", "white", "green", "grey", "gray", "yellow",
+        "pink", "purple", "orange", "brown", "navy", "beige"
+      ].filter((c) => new RegExp(`\\b${c}\\b`, "i").test(prompt));
+      const hasShoes = /\b(?:running shoes?|shoes?|sneakers?)\b/i.test(prompt);
+      const category = hasShoes
+        ? (prompt.includes("running shoes") ? "running shoes" : "shoes")
+        : (/\bshirt\b/i.test(prompt) ? "shirt" : "item");
+      const budgetMatch = prompt.match(/\$(\d+(?:\.\d{1,2})?)/);
+      const budgetText = budgetMatch?.[1];
+      const budgetCents = budgetText !== undefined ? Math.round(Number.parseFloat(budgetText) * 100) : 10000;
+      const sizeMatch = prompt.match(/\b(?:size|sz)\s*:?\s*([A-Za-z0-9]+)\b/i);
+      const size = sizeMatch?.[1];
+      const merchantDeny = /\bresale\b/i.test(prompt) ? ["ReSole Outlet"] : [];
+
       const mockResult = {
-        readback: "The agent may spend up to $120 on running shoes, size 10, never from resale sites, until Nov 14.",
+        readback: `The agent may spend up to $${(budgetCents / 100).toFixed(2)} on ${category}${size ? `, size ${size}` : ""}.`,
         constraints: {
-          budgetAmountCents: 12000,
+          budgetAmountCents: budgetCents,
           currency: "USD",
-          itemCategory: "running shoes",
-          size: "10",
-          attributes: ["white"],
+          itemCategory: category,
+          ...(size ? { size } : {}),
+          attributes: colors,
           merchantAllow: [],
-          merchantDeny: ["ReSole Outlet"],
+          merchantDeny,
           expiresAt: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString()
         }
       };

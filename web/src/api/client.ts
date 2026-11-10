@@ -28,6 +28,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const apiClient = {
+  getPayPalConfig: () =>
+    request<{ paypalMode: "sandbox" | "mock"; paypalClientId: string }>("/api/config"),
+
   // Mandates
   parsePrompt: (prompt: string) =>
     request<ParseMandateResponse>("/api/mandates/parse", {

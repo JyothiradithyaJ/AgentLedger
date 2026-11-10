@@ -1,15 +1,26 @@
 import { z } from "zod";
 
-// Attempt to load .env using Node's built-in loader if available, fallback to dotenv
+// Preserve existing process.env variables so test/CLI values win over .env file
+const initialEnv = { ...process.env };
+
 try {
-  if (typeof process.loadEnvFile === "function") {
-    process.loadEnvFile();
-  } else {
-    const dotenv = await import("dotenv");
-    dotenv.config();
-  }
+  const dotenv = await import("dotenv");
+  dotenv.config({ override: false });
 } catch {
-  // Ignore if .env file does not exist yet (defaults will apply)
+  try {
+    if (typeof process.loadEnvFile === "function") {
+      process.loadEnvFile();
+    }
+  } catch {
+    // Ignore if .env file does not exist yet (defaults will apply)
+  }
+}
+
+// Guarantee that variables originally present in process.env are never overridden
+for (const [key, value] of Object.entries(initialEnv)) {
+  if (value !== undefined) {
+    process.env[key] = value;
+  }
 }
 
 const EnvSchema = z.object({
@@ -39,3 +50,11 @@ const EnvSchema = z.object({
 export type Env = z.infer<typeof EnvSchema>;
 
 export const env: Env = EnvSchema.parse(process.env);
+
+export const getPublicPayPalConfig = (): {
+  paypalMode: Env["PAYPAL_MODE"];
+  paypalClientId: string;
+} => ({
+  paypalMode: env.PAYPAL_MODE,
+  paypalClientId: env.PAYPAL_CLIENT_ID
+});

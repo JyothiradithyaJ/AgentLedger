@@ -79,7 +79,19 @@ export class MandateService {
     if (!mandate) throw new Error(`Mandate ${mandateId} not found`);
     if (!mandate.paypalOrderId) throw new Error(`Mandate ${mandateId} missing PayPal order ID`);
 
-    const authResult = await this.paypal.authorizeOrder(mandate.paypalOrderId);
+    const authResult = await (async () => {
+      try {
+        if (!mandate.paypalOrderId) {
+  throw new Error("Mandate has no PayPal order to authorize");
+}
+        return await this.paypal.authorizeOrder(mandate.paypalOrderId);
+      } catch (err) {
+        if (err instanceof Error && err.message.includes("ORDER_NOT_APPROVED")) {
+          throw new Error("ORDER_NOT_APPROVED");
+        }
+        throw err;
+      }
+    })();
 
     let updated = transitionMandate(mandate, "AUTHORIZED");
     updated = {

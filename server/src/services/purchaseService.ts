@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { Repos } from "../repos/index.js";
-import type { PayPalPort } from "../ports/paypal.port.js";
+import type { PayPalPort, CaptureResult } from "../ports/paypal.port.js";
 import type { MerchantPort } from "../ports/merchant.port.js";
 import type { LLMPort } from "../ports/llm.port.js";
 import type { LedgerService } from "./ledgerService.js";
@@ -14,7 +14,7 @@ import type {
 import { proposeCart } from "../agents/shopper.js";
 import { evaluateDeterministicRules } from "../domain/rules/referee.js";
 import { evaluateSemanticIntent } from "../agents/refereeAI.js";
-import { transitionPurchase } from "../domain/stateMachine.js";
+import { transitionPurchase, transitionMandate } from "../domain/stateMachine.js";
 
 export class PurchaseService {
   constructor(
@@ -33,6 +33,10 @@ export class PurchaseService {
   ): Promise<{ runId: string; purchase: PurchaseRecord }> {
     const mandate = this.repos.mandates.getById(mandateId);
     if (!mandate) throw new Error(`Mandate ${mandateId} not found`);
+
+    if (mandate.status === "COMPLETED" || (mandate.capturedCents > 0 && mandate.heldCents === 0)) {
+      throw new Error("MANDATE_ALREADY_CAPTURED: This mandate's hold has already been captured. Create a new mandate.");
+    }
 
     const runId = crypto.randomUUID();
     const purchaseId = crypto.randomUUID();
@@ -144,19 +148,50 @@ export class PurchaseService {
 
     emit("REFEREE_PASSED", "Referee PASSED cart. Initiating PayPal partial capture...", cart, purchase);
 
-    // 4. Capture on PayPal Rail
+    // 4. Capture on PayPal Rail with Reconciliation
     emit("PAYPAL_CAPTURING", `Executing partial capture for $${(cart.totalCents / 100).toFixed(2)} on hold...`);
 
     const authId = mandate.paypalAuthorizationId ?? "MOCK_AUTH_DEFAULT";
     const requestId = purchase.id;
 
-    const captureResult = await this.paypal.captureAuthorization(
-      authId,
-      cart.totalCents,
-      cart.currency,
-      requestId,
-      true // Final capture releases remainder
-    );
+    let captureResult: CaptureResult;
+    try {
+      captureResult = await this.paypal.captureAuthorization(
+        authId,
+        cart.totalCents,
+        cart.currency,
+        requestId,
+        true // Final capture releases remainder
+      );
+    } catch (captureErr) {
+      const errMsg = captureErr instanceof Error ? captureErr.message : String(captureErr);
+      const isAlreadyCaptured = errMsg.includes("AUTHORIZATION_ALREADY_CAPTURED") || errMsg.includes("422");
+
+      let reconciled = false;
+      if (isAlreadyCaptured || authId) {
+        try {
+          const authDetails = await this.paypal.getAuthorization(authId);
+          if (authDetails.status === "CAPTURED" || authDetails.status === "PARTIALLY_CAPTURED") {
+            const capturedAmount = authDetails.amountCents > 0 ? authDetails.amountCents : cart.totalCents;
+            captureResult = {
+              captureId: `reconciled_${requestId}`,
+              status: authDetails.status,
+              capturedCents: capturedAmount
+            };
+            reconciled = true;
+          }
+        } catch {
+          // Re-throw original capture error if reconciliation lookup fails
+        }
+      }
+
+      if (!reconciled) {
+        purchase = transitionPurchase(purchase, "FAILED");
+        purchase = { ...purchase, failureReason: errMsg };
+        this.repos.purchases.update(purchase);
+        throw captureErr;
+      }
+    }
 
     const releasedCents = mandate.heldCents - captureResult.capturedCents;
 
@@ -170,11 +205,17 @@ export class PurchaseService {
     };
     this.repos.purchases.update(purchase);
 
-    // Update mandate balances
-    mandate.capturedCents += captureResult.capturedCents;
-    mandate.heldCents = 0; // Hold is completed after final capture
-    mandate.remainingCents = Math.max(0, mandate.budgetCents - mandate.capturedCents);
-    this.repos.mandates.update(mandate);
+    // Update mandate balances and transition to COMPLETED
+    let updatedMandate = {
+      ...mandate,
+      capturedCents: mandate.capturedCents + captureResult.capturedCents,
+      heldCents: 0,
+      remainingCents: Math.max(0, mandate.budgetCents - (mandate.capturedCents + captureResult.capturedCents))
+    };
+    if (updatedMandate.status === "ACTIVE") {
+      updatedMandate = transitionMandate(updatedMandate, "COMPLETED");
+    }
+    this.repos.mandates.update(updatedMandate);
 
     this.ledger.recordEvent("PAYMENT_CAPTURED", mandate.id, {
       purchaseId,

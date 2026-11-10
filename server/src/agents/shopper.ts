@@ -1,79 +1,106 @@
 import crypto from "node:crypto";
 import type { LLMPort } from "../ports/llm.port.js";
 import type { MerchantPort } from "../ports/merchant.port.js";
-import type { Mandate, ProposedCart } from "@agentledger/shared";
+import type { CartItem, Mandate, ProposedCart } from "@agentledger/shared";
 import { ProposedCartSchema } from "@agentledger/shared";
+
+const RESALE_MERCHANT = "ReSole Outlet";
+const DRIFT_CATEGORIES = ["office chair", "coffee table", "wireless headphones"];
+
+const titleCase = (value: string): string => value.replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const compliantPrice = (mandate: Mandate): number => {
+  return Math.max(1, Math.floor(mandate.constraints.budgetAmountCents * 82 / 100));
+};
+
+const pickCompliantMerchant = (mandate: Mandate): string => {
+  if (mandate.constraints.merchantAllow.length > 0) {
+    return mandate.constraints.merchantAllow[0] ?? "StrideCo";
+  }
+  const denied = new Set(mandate.constraints.merchantDeny.map((m) => m.toLowerCase()));
+  if (!denied.has("strideco")) return "StrideCo";
+  if (!denied.has("everydaymart")) return "EverydayMart";
+  return "AuthorizedShop";
+};
+
+const wrongSize = (size: string | undefined): string => {
+  if (!size) return "unavailable";
+  const numeric = Number.parseFloat(size.replace(/^(UK|US|EU)\s*/i, ""));
+  if (Number.isFinite(numeric)) return String(numeric + 1);
+  const upper = size.toUpperCase();
+  if (upper === "M") return "L";
+  if (upper === "L") return "XL";
+  if (upper === "XL") return "S";
+  if (upper === "S") return "M";
+  if (upper === "XS") return "M";
+  return `${size} alternative`;
+};
+
+const itemFor = (
+  mandate: Mandate,
+  merchant: string,
+  priceCents: number,
+  category: string,
+  size: string | undefined
+): CartItem => {
+  const colors = mandate.constraints.attributes.filter((attribute) => {
+    return [
+      "red", "blue", "black", "white", "green", "grey", "gray", "yellow",
+      "pink", "purple", "orange", "brown", "navy", "beige"
+    ].includes(attribute.toLowerCase());
+  });
+  const description = [merchant, "Everyday", ...colors.map(titleCase), titleCase(category)].join(" ");
+  const title = size ? `${description} (Size ${size})` : description;
+
+  return {
+    id: `item_${mandate.id}_${priceCents}`,
+    title,
+    merchant,
+    priceCents,
+    quantity: 1,
+    size,
+    attributes: [...mandate.constraints.attributes, ...category.split(/\s+/)],
+    url: `https://strideco.example.com/products/${encodeURIComponent(category.replace(/\s+/g, "-"))}`
+  };
+};
 
 export const proposeCart = async (
   _llm: LLMPort,
-  merchant: MerchantPort,
+  _merchant: MerchantPort,
   mandate: Mandate,
   targetScenario?: "A" | "B" | "C" | "D" | "E"
 ): Promise<ProposedCart> => {
-  // Scenario A / D: Inside mandate ($98.50, StrideCo, size 10)
-  // Scenario B: Over budget ($139, TrailNest)
-  // Scenario C: Resale site / Prohibited (ReSole Outlet)
-  let items = await merchant.searchCatalog(
-    mandate.constraints.itemCategory,
-    mandate.constraints.itemCategory,
-    mandate.constraints.budgetAmountCents
-  );
+  const budgetCents = mandate.constraints.budgetAmountCents;
+  const compliantCents = compliantPrice(mandate);
+  let merchant = pickCompliantMerchant(mandate);
+  let category = mandate.constraints.itemCategory;
+  let size = mandate.constraints.size;
+  let priceCents = compliantCents;
 
   if (targetScenario === "B") {
-    // Select an over-budget item ($139)
-    items = await merchant.searchCatalog("trail", undefined, 20000);
-    const overBudgetItem = items.find((i) => i.priceCents > mandate.constraints.budgetAmountCents);
-    if (overBudgetItem) {
-      return {
-        id: crypto.randomUUID(),
-        mandateId: mandate.id,
-        merchant: overBudgetItem.merchant,
-        items: [overBudgetItem],
-        totalCents: overBudgetItem.priceCents,
-        currency: "USD",
-        proposedAt: new Date().toISOString()
-      };
+    priceCents = Math.max(budgetCents + 1, Math.floor(budgetCents * 130 / 100));
+  } else if (targetScenario === "C") {
+    merchant = mandate.constraints.merchantDeny[0] ?? RESALE_MERCHANT;
+  } else if (targetScenario === "D") {
+    if (mandate.constraints.size) {
+      size = wrongSize(mandate.constraints.size);
+    } else {
+      merchant = mandate.constraints.merchantDeny[0] ?? RESALE_MERCHANT;
     }
+  } else if (targetScenario === "E") {
+    category = DRIFT_CATEGORIES.find((candidate) => {
+      return candidate.toLowerCase() !== mandate.constraints.itemCategory.toLowerCase();
+    }) ?? "different item";
   }
 
-  if (targetScenario === "C") {
-    // Select from resale store
-    items = await merchant.searchCatalog("resole", undefined, 20000);
-    const resaleItem = items.find((i) => i.merchant.toLowerCase().includes("resole"));
-    if (resaleItem) {
-      return {
-        id: crypto.randomUUID(),
-        mandateId: mandate.id,
-        merchant: resaleItem.merchant,
-        items: [resaleItem],
-        totalCents: resaleItem.priceCents,
-        currency: "USD",
-        proposedAt: new Date().toISOString()
-      };
-    }
-  }
-
-  // Default: Choose optimal matching item within budget
-  const bestItem = items[0] ?? {
-    id: "item_stride_runner",
-    title: "StrideCo CloudRunner White (Size 10)",
-    merchant: "StrideCo",
-    priceCents: 9850,
-    quantity: 1,
-    size: mandate.constraints.size ?? "10",
-    attributes: ["running", "white"],
-    url: "https://strideco.example.com/products/cloudrunner"
-  };
-
-  const cart: ProposedCart = {
+  const item = itemFor(mandate, merchant, priceCents, category, size);
+  return ProposedCartSchema.parse({
     id: crypto.randomUUID(),
     mandateId: mandate.id,
-    merchant: bestItem.merchant,
-    items: [bestItem],
-    totalCents: bestItem.priceCents * bestItem.quantity,
+    merchant,
+    items: [item],
+    totalCents: priceCents,
     currency: "USD",
     proposedAt: new Date().toISOString()
-  };
-
-  return ProposedCartSchema.parse(cart);
+  });
 };

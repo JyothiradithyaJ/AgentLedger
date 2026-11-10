@@ -95,11 +95,11 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 - **Exports**: Re-exports all domain functions.
 
 ### `server/src/ports/paypal.port.ts`
-- **Imports**: `@shared`
-- **Exports**: `interface PayPalPort`
+- **Imports**: None
+- **Exports**: `CreateOrderResult`, `AuthorizeResult`, `AuthorizationDetails`, `CaptureResult`, `DisputeDetails`, `interface PayPalPort`
 
 ### `server/src/ports/llm.port.ts`
-- **Imports**: `@shared`, `zod`
+- **Imports**: `zod`
 - **Exports**: `interface LLMPort`
 
 ### `server/src/ports/merchant.port.ts`
@@ -119,8 +119,8 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 - **Exports**: `createAuthorizeOrder`, `getOrder`
 
 ### `server/src/adapters/paypal/authorizations.ts`
-- **Imports**: `./client.js`, `@shared`
-- **Exports**: `authorizeOrder`, `captureAuthorization`, `voidAuthorization`, `reauthorizePayment`
+- **Imports**: `./client.js`, `../../ports/paypal.port.js`
+- **Exports**: `authorizeOrder`, `getAuthorization`, `captureAuthorization`, `voidAuthorization`, `reauthorizePayment`
 
 ### `server/src/adapters/paypal/disputes.ts`
 - **Imports**: `./client.js`, `@shared`
@@ -136,7 +136,7 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 
 ### `server/src/adapters/paypal/index.ts`
 - **Imports**: `./client.js`, `./orders.js`, `./authorizations.js`, `./disputes.js`, `./webhooks.js`, `./toolkit.js`, `../../ports/paypal.port.js`
-- **Exports**: `createPayPalAdapter`
+- **Exports**: `PayPalAdapter`, `createPayPalAdapter`, `PayPalClient`, `createAuthorizeOrder`, `getOrder`, `authorizeOrder`, `getAuthorization`, `captureAuthorization`, `voidAuthorization`, `reauthorizePayment`, `getDispute`, `provideDisputeEvidence`, `verifyWebhookSignature`, `createToolkitTools`
 
 ### `server/src/adapters/llm/rateLimiter.ts`
 - **Exports**: `RateLimiter`
@@ -198,11 +198,15 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 - **Exports**: `createRepos`, `type Repos`
 
 ### `server/src/agents/mandateParser.ts`
-- **Imports**: `../ports/llm.port.js`, `@shared`
+- **Imports**: `../ports/llm.port.js`, `../config/env.js`, `../observability/logger.js`, `./mandateExtractor.js`, `@shared`
 - **Exports**: `parseMandateRequest`
 
+### `server/src/agents/mandateExtractor.ts`
+- **Imports**: None
+- **Exports**: `extractMandateRules`, `type ExtractedMandateRules`
+
 ### `server/src/agents/shopper.ts`
-- **Imports**: `../ports/llm.port.js`, `../ports/merchant.port.js`, `@shared`
+- **Imports**: `node:crypto`, `../ports/llm.port.js`, `../ports/merchant.port.js`, `@shared`
 - **Exports**: `proposeCart`
 
 ### `server/src/agents/refereeAI.ts`
@@ -214,7 +218,7 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 - **Exports**: `analyzeDispute`
 
 ### `server/src/agents/index.ts`
-- **Imports**: `./mandateParser.js`, `./shopper.js`, `./refereeAI.js`, `./disputeAnalyst.js`
+- **Imports**: `./mandateParser.js`, `./mandateExtractor.js`, `./shopper.js`, `./refereeAI.js`, `./disputeAnalyst.js`
 - **Exports**: Re-exports all agents.
 
 ### `server/src/services/mandateService.ts`
@@ -334,3 +338,19 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 
 ### `web/src/pages/Disputes.tsx`
 - **Exports**: `DisputesPage`
+
+---
+
+## 4. server/tests/
+
+### `server/tests/mandateExtractor.test.ts`
+- **Imports**: `vitest`, `../src/agents/index.js`
+- **Exports**: None
+
+### `server/tests/shoppingAgent.test.ts`
+- **Imports**: `vitest`, `@shared`, `../src/agents/shopper.js`, `../src/domain/rules/referee.js`
+- **Exports**: None
+
+### `server/tests/structuredLLM.test.ts`
+- **Imports**: `vitest`, `zod`, `../src/ports/llm.port.js`, `../src/adapters/llm/structured.js`, `../src/adapters/llm/rateLimiter.js`, `../src/adapters/llm/index.js`
+- **Exports**: None

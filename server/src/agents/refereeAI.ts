@@ -38,10 +38,13 @@ Are there any violations of fuzzy constraints (e.g. secondhand, resale, style, u
       SYSTEM_INSTRUCTION
     );
 
+    const isFallback = Boolean(llm.isFallbackActive?.());
+    const fallbackSuffix = isFallback ? " [AI fallback: mock]" : "";
+
     return {
       name: "semantic_intent",
       passed: result.matches_intent,
-      reason: result.reasons.join(" "),
+      reason: `${result.reasons.join(" ")}${fallbackSuffix}`,
       confidence: result.confidence
     };
   } catch {
@@ -49,7 +52,7 @@ Are there any violations of fuzzy constraints (e.g. secondhand, resale, style, u
     return {
       name: "semantic_intent",
       passed: true,
-      reason: "Semantic check skipped due to provider limits; falling back to deterministic rules.",
+      reason: "Semantic check skipped due to provider limits; falling back to deterministic rules. [AI fallback: mock]",
       confidence: 0.6
     };
   }

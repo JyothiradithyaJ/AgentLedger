@@ -6,6 +6,10 @@ import { PayPalButton } from "../components/PayPalButton";
 import { useToast } from "../components/Toast";
 import type { MandateConstraints, Mandate } from "@agentledger/shared";
 
+const isParsedBy = (value: unknown): value is "gemini" | "rules" | "mock" => {
+  return value === "gemini" || value === "rules" || value === "mock";
+};
+
 export const NewMandatePage: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -17,11 +21,17 @@ export const NewMandatePage: React.FC = () => {
   // Parsed state
   const [readback, setReadback] = useState("");
   const [constraints, setConstraints] = useState<MandateConstraints | null>(null);
+  const [parsedBy, setParsedBy] = useState<"gemini" | "rules" | "mock" | null>(null);
+  const [wasOverridden, setWasOverridden] = useState(false);
 
   // Created funding order state
   const [createdMandate, setCreatedMandate] = useState<Mandate | null>(null);
   const [orderId, setOrderId] = useState("");
   const [approveUrl, setApproveUrl] = useState("");
+  const [paypalConfig, setPayPalConfig] = useState<{
+    paypalMode: "sandbox" | "mock";
+    paypalClientId: string;
+  } | null>(null);
 
   const exampleChips = [
     "Buy white running shoes, size 10, under $120, no resale sites",
@@ -29,27 +39,26 @@ export const NewMandatePage: React.FC = () => {
     "Casual sneakers under $90, black or white, verified stores only"
   ];
 
+  const clearParsedState = () => {
+    setReadback("");
+    setConstraints(null);
+    setParsedBy(null);
+    setWasOverridden(false);
+  };
+
   const handleParse = async () => {
     if (!prompt.trim()) return;
+    clearParsedState();
     setLoading(true);
     try {
       const parsed = await apiClient.parsePrompt(prompt);
       setReadback(parsed.readback);
       setConstraints(parsed.constraints);
+      setParsedBy("parsedBy" in parsed && isParsedBy(parsed.parsedBy) ? parsed.parsedBy : "gemini");
+      setWasOverridden("overridden" in parsed && parsed.overridden === true);
       setStep(2);
-    } catch {
-      showToast("Failed to parse prompt. Using fallback structure.", "error");
-      setReadback(`The agent may spend up to $120 on items matching: "${prompt}".`);
-      setConstraints({
-        budgetAmountCents: 12000,
-        currency: "USD",
-        itemCategory: "running shoes",
-        size: "10",
-        attributes: ["white"],
-        merchantAllow: [],
-        merchantDeny: ["ReSole Outlet"]
-      });
-      setStep(2);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Could not understand the request", "error");
     } finally {
       setLoading(false);
     }
@@ -59,10 +68,12 @@ export const NewMandatePage: React.FC = () => {
     if (!constraints) return;
     setLoading(true);
     try {
+      const config = await apiClient.getPayPalConfig();
       const res = await apiClient.createMandate(prompt, readback, constraints);
       setCreatedMandate(res.mandate);
       setOrderId(res.paypalOrderId);
       setApproveUrl(res.approveUrl);
+      setPayPalConfig(config);
       setStep(3);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Error creating PayPal funding order", "error");
@@ -79,8 +90,8 @@ export const NewMandatePage: React.FC = () => {
       setTimeout(() => {
         navigate(`/mandates/${createdMandate.id}`);
       }, 1200);
-    } catch {
-      showToast("Error confirming authorization hold", "error");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Error confirming authorization hold", "error");
     }
   };
 
@@ -180,6 +191,11 @@ export const NewMandatePage: React.FC = () => {
               Mandate Readback Agreement
             </div>
             <div style={{ marginTop: "4px", fontWeight: 500 }}>"{readback}"</div>
+            {parsedBy ? (
+              <span className="badge" style={{ display: "inline-flex", marginTop: "8px" }}>
+                {parsedBy === "gemini" ? (wasOverridden ? "Gemini + rules" : "Gemini") : parsedBy === "rules" ? "Rules" : "Mock"}
+              </span>
+            ) : null}
           </div>
 
           {/* Constraint Chips */}
@@ -207,7 +223,10 @@ export const NewMandatePage: React.FC = () => {
           )}
 
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px" }}>
-            <button onClick={() => setStep(1)} className="btn btn-outline">
+            <button onClick={() => {
+              clearParsedState();
+              setStep(1);
+            }} className="btn btn-outline">
               Back to Edit
             </button>
             <button onClick={handleCreateOrder} disabled={loading} className="btn btn-primary">
@@ -228,11 +247,22 @@ export const NewMandatePage: React.FC = () => {
             </p>
           </div>
 
-          <PayPalButton
-            orderId={orderId}
-            approveUrl={approveUrl}
-            onSuccess={handleHoldAuthorized}
-          />
+          {paypalConfig ? (
+            <>
+              <span className="badge">
+                {paypalConfig.paypalMode === "sandbox" ? "PayPal Sandbox" : "Mock"}
+              </span>
+              <PayPalButton
+                orderId={orderId}
+                approveUrl={approveUrl}
+                paypalMode={paypalConfig.paypalMode}
+                paypalClientId={paypalConfig.paypalClientId}
+                onSuccess={handleHoldAuthorized}
+              />
+            </>
+          ) : (
+            <div role="alert">PayPal configuration could not be loaded. Please return and try again.</div>
+          )}
         </div>
       )}
     </div>

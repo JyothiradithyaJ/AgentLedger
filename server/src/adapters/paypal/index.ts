@@ -2,6 +2,7 @@ import type {
   PayPalPort,
   CreateOrderResult,
   AuthorizeResult,
+  AuthorizationDetails,
   CaptureResult,
   DisputeDetails
 } from "../../ports/paypal.port.js";
@@ -9,6 +10,7 @@ import { PayPalClient } from "./client.js";
 import { createAuthorizeOrder, getOrder } from "./orders.js";
 import {
   authorizeOrder,
+  getAuthorization,
   captureAuthorization,
   voidAuthorization,
   reauthorizePayment
@@ -46,6 +48,18 @@ export class PayPalAdapter implements PayPalPort {
       };
     }
     return authorizeOrder(this.client, orderId);
+  }
+
+  async getAuthorization(authorizationId: string): Promise<AuthorizationDetails> {
+    if (env.PAYPAL_MODE === "mock" || authorizationId.startsWith("MOCK_")) {
+      logger.info({ authorizationId }, "MOCK PayPal getAuthorization invoked");
+      return {
+        authorizationId,
+        status: "CAPTURED",
+        amountCents: 9840
+      };
+    }
+    return getAuthorization(this.client, authorizationId);
   }
 
   async captureAuthorization(
@@ -139,6 +153,7 @@ export {
   createAuthorizeOrder,
   getOrder,
   authorizeOrder,
+  getAuthorization,
   captureAuthorization,
   voidAuthorization,
   reauthorizePayment,

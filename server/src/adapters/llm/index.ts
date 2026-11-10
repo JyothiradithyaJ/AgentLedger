@@ -12,6 +12,7 @@ export class ResilientLLMAdapter implements LLMPort {
   private readonly primary: LLMPort;
   private readonly fallback: LLMPort;
   private readonly circuitBreaker: CircuitBreaker;
+  private lastUsedFallback: boolean = false;
 
   constructor(primary: LLMPort, fallback: LLMPort = new MockLLMAdapter()) {
     this.primary = primary;
@@ -19,18 +20,26 @@ export class ResilientLLMAdapter implements LLMPort {
     this.circuitBreaker = new CircuitBreaker(3, 30000);
   }
 
+  isFallbackActive(): boolean {
+    return this.circuitBreaker.isOpen() || this.lastUsedFallback;
+  }
+
   async generateStructured<T>(
     prompt: string,
     schema: z.ZodType<T>,
     systemInstruction?: string
   ): Promise<T> {
+    this.lastUsedFallback = false;
     return generateStructuredJson(
       this.primary,
       this.fallback,
       this.circuitBreaker,
       prompt,
       schema,
-      systemInstruction
+      systemInstruction,
+      () => {
+        this.lastUsedFallback = true;
+      }
     );
   }
 }

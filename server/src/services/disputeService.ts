@@ -77,6 +77,11 @@ export class DisputeService {
       dispute.reason
     );
 
+    const header = `FAULT ATTRIBUTION: ${verdict.fault}`;
+    verdict.evidencePacket = verdict.evidencePacket.startsWith(header)
+      ? verdict.evidencePacket
+      : `${header}\n\n${verdict.evidencePacket}`;
+
     dispute.verdict = verdict;
     this.repos.disputes.update(dispute);
     return verdict;

@@ -25,7 +25,6 @@ export const analyzeDispute = async (
   disputeId: string,
   disputeReason: string
 ): Promise<DisputeVerdict> => {
-  // 1. Fetch live or mock dispute details from PayPal Port
   let allowedEvidenceTypes = ["PROOF_OF_FULFILLMENT", "ADDITIONAL_INFORMATION_EVIDENCE"];
   try {
     const disputeDetails = await paypal.getDispute(disputeId);
@@ -34,7 +33,6 @@ export const analyzeDispute = async (
     logger.warn({ err, disputeId }, "Could not fetch dispute details from PayPal port; using defaults");
   }
 
-  // 2. Prepare structured analysis prompt
   const prompt = `Analyze this transaction dispute and determine fault:
 Dispute ID: ${disputeId}
 Dispute Reason: "${disputeReason}"
@@ -60,9 +58,17 @@ Cryptographic Evidence Chain:
 Attribute fault and output complete JSON adhering to the DisputeVerdict schema.`;
 
   try {
-    return await llm.generateStructured(prompt, DisputeVerdictSchema, SYSTEM_INSTRUCTION);
+    const verdict = await llm.generateStructured(prompt, DisputeVerdictSchema, SYSTEM_INSTRUCTION);
+    if (llm.isFallbackActive?.()) {
+      const firstReason = verdict.reasons[0] ?? "";
+      verdict.reasons[0] = `${firstReason} [AI fallback: mock]`;
+    }
+    return verdict;
   } catch (err) {
     logger.warn({ err }, "LLM dispute analysis failed; falling back to deterministic domain rule attribution");
-    return attributeFault(mandate, purchase, ledgerEntries, disputeReason);
+    const verdict = attributeFault(mandate, purchase, ledgerEntries, disputeReason);
+    const firstReason = verdict.reasons[0] ?? "";
+    verdict.reasons[0] = `${firstReason} [AI fallback: mock]`;
+    return verdict;
   }
 };

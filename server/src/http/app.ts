@@ -16,6 +16,7 @@ import { createDisputesRouter } from "./routes/disputes.js";
 import { createWebhooksRouter } from "./routes/webhooks.js";
 import { createDemoRouter } from "./routes/demo.js";
 import { createHealthRouter } from "./routes/health.js";
+import { getPublicPayPalConfig } from "../config/env.js";
 
 export const createApp = (container: Container = createContainer()): Express => {
   const app = express();
@@ -28,6 +29,9 @@ export const createApp = (container: Container = createContainer()): Express => 
   app.use("/api/", apiRateLimiter);
 
   // Mount API Contract Routes
+  app.get("/api/config", (_req, res) => {
+    res.json(getPublicPayPalConfig());
+  });
   app.use("/api/mandates", createMandatesRouter(container));
   app.use("/api/purchases", createPurchasesRouter(container));
   app.use("/api/runs", createRunsRouter(container));

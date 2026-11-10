@@ -8,10 +8,18 @@ export interface AuthorizeResult {
   status: string;
 }
 
+export interface AuthorizationDetails {
+  authorizationId: string;
+  status: string;
+  amountCents: number;
+}
+
 export interface CaptureResult {
   captureId: string;
   status: string;
   capturedCents: number;
+  feeCents?: number;
+  netCents?: number;
 }
 
 export interface DisputeDetails {
@@ -25,6 +33,7 @@ export interface DisputeDetails {
 export interface PayPalPort {
   createOrder(amountCents: number, currency: string, customId: string): Promise<CreateOrderResult>;
   authorizeOrder(orderId: string): Promise<AuthorizeResult>;
+  getAuthorization(authorizationId: string): Promise<AuthorizationDetails>;
   captureAuthorization(
     authorizationId: string,
     amountCents: number,

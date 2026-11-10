@@ -3,6 +3,7 @@ import { PayPalClient } from "../src/adapters/paypal/client.js";
 import { createAuthorizeOrder } from "../src/adapters/paypal/orders.js";
 import {
   authorizeOrder,
+  getAuthorization,
   captureAuthorization,
   voidAuthorization
 } from "../src/adapters/paypal/authorizations.js";
@@ -141,6 +142,106 @@ describe("PayPal Adapter Unit Tests (Mocked Fetch)", () => {
     const result = await captureAuthorization(client, "AUTH_777", 9850, "USD", "req_1", false);
     expect(result.captureId).toBe("CAP_555");
     expect(result.capturedCents).toBe(9850);
+  });
+
+  it("captures authorization defensively when seller_receivable_breakdown is missing and status is PENDING", async () => {
+    const mockPendingCaptureResponse = {
+      id: "CAP_PENDING_1",
+      status: "PENDING",
+      amount: { value: "45.00", currency_code: "USD" }
+    };
+
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url.includes("/v1/oauth2/token")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: "mock_token", expires_in: 3600 })
+        });
+      }
+      if (url.includes("/v2/payments/authorizations/AUTH_PENDING/capture")) {
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          json: async () => mockPendingCaptureResponse
+        });
+      }
+      return Promise.reject(new Error("Unexpected endpoint"));
+    });
+
+    const result = await captureAuthorization(client, "AUTH_PENDING", 4500, "USD", "req_pending", true);
+    expect(result.captureId).toBe("CAP_PENDING_1");
+    expect(result.status).toBe("PENDING");
+    expect(result.capturedCents).toBe(4500);
+    expect(result.feeCents).toBeUndefined();
+    expect(result.netCents).toBeUndefined();
+  });
+
+  it("captures authorization and parses seller_receivable_breakdown fee and net", async () => {
+    const mockBreakdownResponse = {
+      id: "CAP_BREAKDOWN_1",
+      status: "COMPLETED",
+      amount: { value: "98.50", currency_code: "USD" },
+      seller_receivable_breakdown: {
+        paypal_fee: { value: "3.20", currency_code: "USD" },
+        net_amount: { value: "95.30", currency_code: "USD" }
+      }
+    };
+
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url.includes("/v1/oauth2/token")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: "mock_token", expires_in: 3600 })
+        });
+      }
+      if (url.includes("/v2/payments/authorizations/AUTH_FEE/capture")) {
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          json: async () => mockBreakdownResponse
+        });
+      }
+      return Promise.reject(new Error("Unexpected endpoint"));
+    });
+
+    const result = await captureAuthorization(client, "AUTH_FEE", 9850, "USD", "req_fee", true);
+    expect(result.captureId).toBe("CAP_BREAKDOWN_1");
+    expect(result.capturedCents).toBe(9850);
+    expect(result.feeCents).toBe(320);
+    expect(result.netCents).toBe(9530);
+  });
+
+  it("retrieves authorization details defensively via getAuthorization", async () => {
+    const mockAuthDetailsResponse = {
+      id: "AUTH_DETAILS_1",
+      status: "CAPTURED",
+      amount: { value: "85.25", currency_code: "USD" }
+    };
+
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url.includes("/v1/oauth2/token")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: "mock_token", expires_in: 3600 })
+        });
+      }
+      if (url.includes("/v2/payments/authorizations/AUTH_DETAILS_1")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockAuthDetailsResponse
+        });
+      }
+      return Promise.reject(new Error("Unexpected endpoint"));
+    });
+
+    const result = await getAuthorization(client, "AUTH_DETAILS_1");
+    expect(result.authorizationId).toBe("AUTH_DETAILS_1");
+    expect(result.status).toBe("CAPTURED");
+    expect(result.amountCents).toBe(8525);
   });
 
   it("voids an authorization successfully", async () => {
