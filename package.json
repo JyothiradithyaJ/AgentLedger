@@ -1,0 +1,29 @@
+{
+  "name": "agent-ledger-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -k \"npm run --workspace=server dev\" \"npm run --workspace=web dev\"",
+    "build": "npm run --workspace=shared build && npm run --workspace=server build && npm run --workspace=web build",
+    "start": "npm run --workspace=server start",
+    "test": "vitest run",
+    "doctor": "tsx server/scripts/doctor.ts",
+    "seed": "tsx server/scripts/seed.ts",
+    "smoke:paypal": "tsx server/scripts/smokePaypal.ts",
+    "scenario": "tsx server/scripts/scenario.ts",
+    "verify:ledger": "tsx server/scripts/verifyLedger.ts"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "dotenv": "^16.4.5",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.3",
+    "vitest": "^1.4.0"
+  }
+}
