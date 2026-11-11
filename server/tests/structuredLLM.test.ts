@@ -9,7 +9,6 @@ const SampleSchema = z.object({
   status: z.string(),
   count: z.number()
 });
-type SampleType = z.infer<typeof SampleSchema>;
 
 describe("Structured LLM and Circuit Breaker Unit Tests", () => {
   it("does not attempt repair retry on HTTP 429 and routes directly to fallback", async () => {

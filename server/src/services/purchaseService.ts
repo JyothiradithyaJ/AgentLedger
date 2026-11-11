@@ -3,6 +3,8 @@ import type { Repos } from "../repos/index.js";
 import type { PayPalPort, CaptureResult } from "../ports/paypal.port.js";
 import type { MerchantPort } from "../ports/merchant.port.js";
 import type { LLMPort } from "../ports/llm.port.js";
+import type { CatalogPort } from "../ports/catalog.port.js";
+import { MockCatalogAdapter } from "../adapters/catalog/index.js";
 import type { LedgerService } from "./ledgerService.js";
 import type {
   PurchaseRecord,
@@ -12,7 +14,7 @@ import type {
   RunTimelineEvent
 } from "@agentledger/shared";
 import { proposeCart } from "../agents/shopper.js";
-import { evaluateDeterministicRules } from "../domain/rules/referee.js";
+import { evaluateDeterministicRules, verifyPriceAgainstCatalog } from "../domain/rules/referee.js";
 import { evaluateSemanticIntent } from "../agents/refereeAI.js";
 import { transitionPurchase, transitionMandate } from "../domain/stateMachine.js";
 
@@ -22,7 +24,8 @@ export class PurchaseService {
     private readonly paypal: PayPalPort,
     private readonly merchant: MerchantPort,
     private readonly llm: LLMPort,
-    private readonly ledger: LedgerService
+    private readonly ledger: LedgerService,
+    private readonly catalog: CatalogPort = new MockCatalogAdapter()
   ) {}
 
   async executeAgentRun(
@@ -57,7 +60,7 @@ export class PurchaseService {
 
     // 1. Propose Cart
     emit("SEARCHING_CATALOG", `Searching catalog for "${mandate.constraints.itemCategory}"...`);
-    const cart = await proposeCart(this.llm, this.merchant, mandate, scenarioName);
+    const cart = await proposeCart(this.llm, this.merchant, mandate, scenarioName, this.catalog);
     emit("CART_PROPOSED", `Proposed cart from "${cart.merchant}" ($${(cart.totalCents / 100).toFixed(2)})`, cart);
 
     this.ledger.recordEvent("CART_PROPOSED", mandate.id, {
@@ -65,7 +68,13 @@ export class PurchaseService {
       cartId: cart.id,
       merchant: cart.merchant,
       totalCents: cart.totalCents,
-      items: cart.items
+      items: cart.items,
+      catalogSource: cart.planDetails?.catalogSource ?? "mock",
+      productUrl: cart.planDetails?.productUrl ?? cart.items[0]?.url,
+      query: cart.planDetails?.query ?? mandate.constraints.itemCategory,
+      selectedBy: cart.planDetails?.selectedBy ?? "rules",
+      candidatesConsidered: cart.planDetails?.candidatesConsidered ?? [],
+      verifiedPriceCents: cart.planDetails?.verifiedPriceCents ?? cart.totalCents
     });
 
     let purchase: PurchaseRecord = {
@@ -99,6 +108,14 @@ export class PurchaseService {
       purchase = transitionPurchase(purchase, "CHECKING");
       emit("REFEREE_EVALUATING", "Referee running deterministic checks (budget, merchant, size, quantity)...");
       const rules = evaluateDeterministicRules(mandate, cart);
+
+      emit("REFEREE_EVALUATING", "Referee re-verifying price against catalogue...");
+      const priceVerifiedCheck = await verifyPriceAgainstCatalog(this.catalog, cart);
+      rules.checks.push(priceVerifiedCheck);
+      if (!priceVerifiedCheck.passed) {
+        rules.passed = false;
+        rules.reasons.push(priceVerifiedCheck.reason);
+      }
 
       let semanticCheckPassed = true;
       if (rules.passed) {
@@ -156,41 +173,18 @@ export class PurchaseService {
 
     let captureResult: CaptureResult;
     try {
-      captureResult = await this.paypal.captureAuthorization(
+      captureResult = await this.captureOrReconcile(
         authId,
         cart.totalCents,
         cart.currency,
-        requestId,
-        true // Final capture releases remainder
+        requestId
       );
     } catch (captureErr) {
       const errMsg = captureErr instanceof Error ? captureErr.message : String(captureErr);
-      const isAlreadyCaptured = errMsg.includes("AUTHORIZATION_ALREADY_CAPTURED") || errMsg.includes("422");
-
-      let reconciled = false;
-      if (isAlreadyCaptured || authId) {
-        try {
-          const authDetails = await this.paypal.getAuthorization(authId);
-          if (authDetails.status === "CAPTURED" || authDetails.status === "PARTIALLY_CAPTURED") {
-            const capturedAmount = authDetails.amountCents > 0 ? authDetails.amountCents : cart.totalCents;
-            captureResult = {
-              captureId: `reconciled_${requestId}`,
-              status: authDetails.status,
-              capturedCents: capturedAmount
-            };
-            reconciled = true;
-          }
-        } catch {
-          // Re-throw original capture error if reconciliation lookup fails
-        }
-      }
-
-      if (!reconciled) {
-        purchase = transitionPurchase(purchase, "FAILED");
-        purchase = { ...purchase, failureReason: errMsg };
-        this.repos.purchases.update(purchase);
-        throw captureErr;
-      }
+      purchase = transitionPurchase(purchase, "FAILED");
+      purchase = { ...purchase, failureReason: errMsg };
+      this.repos.purchases.update(purchase);
+      throw captureErr;
     }
 
     const releasedCents = mandate.heldCents - captureResult.capturedCents;
@@ -233,6 +227,44 @@ export class PurchaseService {
     emit("COMPLETED", "Agent run successfully completed inside mandate.", cart, purchase);
 
     return { runId, purchase };
+  }
+
+  private async captureOrReconcile(
+    authId: string,
+    cartTotalCents: number,
+    currency: string,
+    requestId: string
+  ): Promise<CaptureResult> {
+    try {
+      return await this.paypal.captureAuthorization(
+        authId,
+        cartTotalCents,
+        currency,
+        requestId,
+        true
+      );
+    } catch (captureErr) {
+      const errMsg = captureErr instanceof Error ? captureErr.message : String(captureErr);
+      const isAlreadyCaptured = errMsg.includes("AUTHORIZATION_ALREADY_CAPTURED") || errMsg.includes("422");
+
+      if (isAlreadyCaptured || authId) {
+        try {
+          const authDetails = await this.paypal.getAuthorization(authId);
+          if (authDetails.status === "CAPTURED" || authDetails.status === "PARTIALLY_CAPTURED") {
+            const capturedAmount = authDetails.amountCents > 0 ? authDetails.amountCents : cartTotalCents;
+            return {
+              captureId: `reconciled_${requestId}`,
+              status: authDetails.status,
+              capturedCents: capturedAmount
+            };
+          }
+        } catch {
+          // Re-throw original capture error if reconciliation lookup fails
+        }
+      }
+
+      throw captureErr;
+    }
   }
 
   async handleHumanDecision(

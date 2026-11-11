@@ -21,11 +21,19 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 - **Imports**: `zod`
 - **Exports**:
   - `CartItemSchema`, `type CartItem`
+  - `ProposedCartPlanDetailsSchema`, `type ProposedCartPlanDetails`
   - `ProposedCartSchema`, `type ProposedCart`
+
+### `shared/schemas/catalog.ts`
+- **Imports**: `zod`
+- **Exports**:
+  - `CatalogProductSourceSchema`, `type CatalogProductSource`
+  - `CatalogProductSchema`, `type CatalogProduct`
 
 ### `shared/schemas/decision.ts`
 - **Imports**: `zod`, `./cart.js`
 - **Exports**:
+  - `RefereeCheckTypeSchema`, `type RefereeCheckType`
   - `RefereeCheckSchema`, `type RefereeCheck`
   - `RefereeDecisionSchema`, `type RefereeDecision`
   - `PurchaseStatusSchema`, `type PurchaseStatus`
@@ -68,15 +76,15 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 
 ### `server/src/config/env.ts`
 - **Imports**: `zod`, `dotenv`
-- **Exports**: `env`, `type Env`
+- **Exports**: `env`, `type Env`, `getPublicPayPalConfig`, `getPublicConfig`
 
 ### `server/src/observability/logger.ts`
 - **Imports**: `pino`, `../config/env.js`
 - **Exports**: `logger`, `createRequestLogger`
 
 ### `server/src/domain/rules/referee.ts`
-- **Imports**: `@shared`
-- **Exports**: `evaluateDeterministicRules`
+- **Imports**: `@shared`, `../../ports/catalog.port.js`
+- **Exports**: `evaluateDeterministicRules`, `verifyPriceAgainstCatalog`
 
 ### `server/src/domain/ledgerChain.ts`
 - **Imports**: `node:crypto`, `@shared`
@@ -106,8 +114,12 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 - **Imports**: `@shared`
 - **Exports**: `interface MerchantPort`
 
+### `server/src/ports/catalog.port.ts`
+- **Imports**: `@shared`
+- **Exports**: `interface CatalogSearchOptions`, `interface CatalogPort`
+
 ### `server/src/ports/index.ts`
-- **Imports**: `./paypal.port.js`, `./llm.port.js`, `./merchant.port.js`
+- **Imports**: `./paypal.port.js`, `./llm.port.js`, `./merchant.port.js`, `./catalog.port.js`
 - **Exports**: Re-exports all ports.
 
 ### `server/src/adapters/paypal/client.ts`
@@ -173,6 +185,22 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 - **Imports**: `./demomart.js`, `./catalog.seed.js`
 - **Exports**: `createMerchantAdapter`
 
+### `server/src/adapters/catalog/dummyJsonCatalog.ts`
+- **Imports**: `../../ports/catalog.port.js`, `@shared`
+- **Exports**: `DummyJsonCatalogAdapter`
+
+### `server/src/adapters/catalog/mockCatalog.ts`
+- **Imports**: `../../ports/catalog.port.js`, `../merchant/catalog.seed.js`, `@shared`
+- **Exports**: `MockCatalogAdapter`
+
+### `server/src/adapters/catalog/resilientCatalog.ts`
+- **Imports**: `../../ports/catalog.port.js`, `../../observability/logger.js`, `@shared`
+- **Exports**: `ResilientCatalogAdapter`
+
+### `server/src/adapters/catalog/index.ts`
+- **Imports**: `./dummyJsonCatalog.js`, `./mockCatalog.js`, `./resilientCatalog.js`, `../../config/env.js`, `../../ports/catalog.port.js`
+- **Exports**: `DummyJsonCatalogAdapter`, `MockCatalogAdapter`, `ResilientCatalogAdapter`, `createCatalogAdapter`
+
 ### `server/src/repos/db.ts`
 - **Imports**: `node:sqlite`, `node:fs`, `node:path`, `../config/env.js`
 - **Exports**: `getDb`, `initDb`
@@ -206,7 +234,7 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 - **Exports**: `extractMandateRules`, `type ExtractedMandateRules`
 
 ### `server/src/agents/shopper.ts`
-- **Imports**: `node:crypto`, `../ports/llm.port.js`, `../ports/merchant.port.js`, `@shared`
+- **Imports**: `node:crypto`, `../ports/llm.port.js`, `../ports/merchant.port.js`, `../ports/catalog.port.js`, `../adapters/catalog/index.js`, `../config/env.js`, `@shared`
 - **Exports**: `proposeCart`
 
 ### `server/src/agents/refereeAI.ts`
@@ -307,7 +335,27 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 
 ### `web/src/api/client.ts`
 - **Imports**: `@shared`
-- **Exports**: `apiClient`
+- **Exports**: `apiClient`, `type AppConfig`
+
+### `web/src/lib/checkStatus.ts`
+- **Imports**: None
+- **Exports**: `classifyCheck`, `type CheckStatus`
+
+### `web/src/components/LiveBadges.tsx`
+- **Imports**: `react`, `../api/client.js`
+- **Exports**: `LiveBadges`
+
+### `web/src/components/ProductCard.tsx`
+- **Imports**: `react`, `lucide-react`, `./SvgArt.js`
+- **Exports**: `ProductCard`
+
+### `web/src/components/CatalogPanel.tsx`
+- **Imports**: `react`, `lucide-react`, `@shared`, `./ProductCard.js`
+- **Exports**: `CatalogPanel`
+
+### `web/src/components/RunTimeline.tsx`
+- **Imports**: `react`, `lucide-react`, `@shared`
+- **Exports**: `RunTimeline`
 
 ### `web/src/components/Header.tsx`
 - **Exports**: `Header`
@@ -353,4 +401,16 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 
 ### `server/tests/structuredLLM.test.ts`
 - **Imports**: `vitest`, `zod`, `../src/ports/llm.port.js`, `../src/adapters/llm/structured.js`, `../src/adapters/llm/rateLimiter.js`, `../src/adapters/llm/index.js`
+- **Exports**: None
+
+### `server/tests/catalog.test.ts`
+- **Imports**: `vitest`, `@shared`, `../src/adapters/catalog/index.js`, `../src/ports/catalog.port.js`
+- **Exports**: None
+
+### `server/tests/liveCatalogShopper.test.ts`
+- **Imports**: `vitest`, `@shared`, `../src/agents/shopper.js`, `../src/domain/rules/referee.js`, `../src/ports/catalog.port.js`, `../src/ports/llm.port.js`, `../src/ports/merchant.port.js`
+- **Exports**: None
+
+### `web/src/lib/checkStatus.test.ts`
+- **Imports**: `vitest`, `./checkStatus.js`
 - **Exports**: None

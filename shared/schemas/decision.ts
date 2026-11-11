@@ -7,7 +7,8 @@ export const RefereeCheckTypeSchema = z.enum([
   "item_match",
   "size",
   "quantity",
-  "semantic_intent"
+  "semantic_intent",
+  "price_verified"
 ]);
 export type RefereeCheckType = z.infer<typeof RefereeCheckTypeSchema>;
 

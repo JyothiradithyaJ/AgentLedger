@@ -41,6 +41,7 @@ const EnvSchema = z.object({
   OLLAMA_BASE_URL: z.string().url().default("http://localhost:11434"),
   OLLAMA_MODEL: z.string().default("llama3.2"),
   LLM_PROVIDER: z.enum(["gemini", "ollama", "mock"]).default("mock"),
+  CATALOG_PROVIDER: z.enum(["mock", "dummyjson"]).default("mock"),
   DISPUTE_MODE: z.enum(["simulated", "sandbox"]).default("simulated"),
   USE_AGENT_TOOLKIT: z.enum(["true", "false"]).transform((v) => v === "true").default("false"),
   DATABASE_PATH: z.string().default("data/agentledger.db"),
@@ -50,6 +51,20 @@ const EnvSchema = z.object({
 export type Env = z.infer<typeof EnvSchema>;
 
 export const env: Env = EnvSchema.parse(process.env);
+
+export const getPublicConfig = (): {
+  paypalMode: Env["PAYPAL_MODE"];
+  paypalClientId: string;
+  catalogProvider: Env["CATALOG_PROVIDER"];
+  llmProvider: Env["LLM_PROVIDER"];
+  disputeMode: Env["DISPUTE_MODE"];
+} => ({
+  paypalMode: env.PAYPAL_MODE,
+  paypalClientId: env.PAYPAL_CLIENT_ID,
+  catalogProvider: env.CATALOG_PROVIDER,
+  llmProvider: env.LLM_PROVIDER,
+  disputeMode: env.DISPUTE_MODE
+});
 
 export const getPublicPayPalConfig = (): {
   paypalMode: Env["PAYPAL_MODE"];

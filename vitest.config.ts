@@ -11,6 +11,7 @@ export default defineConfig({
     env: {
       PAYPAL_MODE: "mock",
       LLM_PROVIDER: "mock",
+      CATALOG_PROVIDER: "mock",
       DISPUTE_MODE: "simulated",
       NODE_ENV: "test",
       USE_AGENT_TOOLKIT: "false"

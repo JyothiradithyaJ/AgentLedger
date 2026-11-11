@@ -30,31 +30,31 @@ export const DemoDrawer: React.FC<DemoDrawerProps> = ({
   const scenarios = [
     {
       id: "A",
-      name: "Scene 1: Inside Mandate ($98.50)",
-      cue: "Proves PayPal captures $98.50 and automatically releases remainder of $120 hold.",
+      name: "Compliant purchase",
+      cue: "Proves PayPal captures compliant cart and automatically releases remainder of hold.",
       tag: "PASS"
     },
     {
       id: "B",
-      name: "Scene 2a: Over-Budget Attempt ($139)",
+      name: "Tempted: over budget",
       cue: "Proves budget guardrail catches violation before any money moves.",
       tag: "BLOCKED"
     },
     {
       id: "C",
-      name: "Scene 2b: Resale Site (ReSole Outlet)",
-      cue: "Proves semantic AI referee halts prompt drift and unauthorized marketplace.",
+      name: "Resale Site [Demo overlay]",
+      cue: "Proves semantic AI referee halts unauthorized marketplace using overlay data.",
       tag: "BLOCKED"
     },
     {
       id: "D",
-      name: "Scene 3: Merchant Fault Dispute",
+      name: "Merchant Fault Dispute",
       cue: "Buyer claims defective product; Evidence agent verifies merchant liability.",
       tag: "DISPUTE"
     },
     {
       id: "E",
-      name: "Scene 4: Counterfactual Test",
+      name: "Intent drift",
       cue: "Runs agent drift with Referee OFF (captured & disputed) vs Referee ON (blocked).",
       tag: "A/B TEST"
     }

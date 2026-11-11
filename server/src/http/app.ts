@@ -16,13 +16,22 @@ import { createDisputesRouter } from "./routes/disputes.js";
 import { createWebhooksRouter } from "./routes/webhooks.js";
 import { createDemoRouter } from "./routes/demo.js";
 import { createHealthRouter } from "./routes/health.js";
-import { getPublicPayPalConfig } from "../config/env.js";
+import { getPublicConfig } from "../config/env.js";
 
 export const createApp = (container: Container = createContainer()): Express => {
   const app = express();
 
   // Basic security and parsing middleware
-  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+          "img-src": ["'self'", "data:", "https:"]
+        }
+      }
+    })
+  );
   app.use(cors());
   app.use(express.json({ limit: "1mb" }));
   app.use(createRequestLogger());
@@ -30,7 +39,7 @@ export const createApp = (container: Container = createContainer()): Express => 
 
   // Mount API Contract Routes
   app.get("/api/config", (_req, res) => {
-    res.json(getPublicPayPalConfig());
+    res.json(getPublicConfig());
   });
   app.use("/api/mandates", createMandatesRouter(container));
   app.use("/api/purchases", createPurchasesRouter(container));

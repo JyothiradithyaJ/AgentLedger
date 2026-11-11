@@ -27,9 +27,17 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   return res.json() as Promise<T>;
 }
 
+export interface AppConfig {
+  paypalMode: "sandbox" | "mock";
+  paypalClientId: string;
+  catalogProvider: "mock" | "dummyjson";
+  llmProvider: "gemini" | "ollama" | "mock";
+  disputeMode: "simulated" | "sandbox";
+}
+
 export const apiClient = {
-  getPayPalConfig: () =>
-    request<{ paypalMode: "sandbox" | "mock"; paypalClientId: string }>("/api/config"),
+  getConfig: () => request<AppConfig>("/api/config"),
+  getPayPalConfig: () => request<AppConfig>("/api/config"),
 
   // Mandates
   parsePrompt: (prompt: string) =>

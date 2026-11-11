@@ -3,6 +3,7 @@ import type {
   ProposedCart,
   RefereeCheck
 } from "@agentledger/shared";
+import type { CatalogPort } from "../../ports/catalog.port.js";
 
 export interface DeterministicRulesResult {
   passed: boolean;
@@ -114,27 +115,37 @@ export const evaluateDeterministicRules = (
   // 5. Size Check
   const requiredSize = mandate.constraints.size;
   if (requiredSize) {
-    const sizeMatches = cart.items.every((item) => {
-      if (!item.size) return false;
-      return item.size.toLowerCase() === requiredSize.toLowerCase();
-    });
-
-    if (sizeMatches) {
+    const hasAnySize = cart.items.some((item) => Boolean(item.size));
+    if (!hasAnySize) {
       checks.push({
         name: "size",
         passed: true,
-        reason: `All items match required size "${requiredSize}"`,
-        confidence: 1.0
+        reason: "Not verifiable: size not available on this catalogue",
+        confidence: 0.5
       });
     } else {
-      const reason = `Cart item sizes do not match requested size "${requiredSize}"`;
-      checks.push({
-        name: "size",
-        passed: false,
-        reason,
-        confidence: 1.0
+      const sizeMatches = cart.items.every((item) => {
+        if (!item.size) return false;
+        return item.size.toLowerCase() === requiredSize.toLowerCase();
       });
-      reasons.push(reason);
+
+      if (sizeMatches) {
+        checks.push({
+          name: "size",
+          passed: true,
+          reason: `All items match required size "${requiredSize}"`,
+          confidence: 1.0
+        });
+      } else {
+        const reason = `Cart item sizes do not match requested size "${requiredSize}"`;
+        checks.push({
+          name: "size",
+          passed: false,
+          reason,
+          confidence: 1.0
+        });
+        reasons.push(reason);
+      }
     }
   } else {
     checks.push({
@@ -198,5 +209,66 @@ export const evaluateDeterministicRules = (
     passed,
     checks,
     reasons
+  };
+};
+
+export const verifyPriceAgainstCatalog = async (
+  catalog: CatalogPort,
+  cart: ProposedCart
+): Promise<RefereeCheck> => {
+  const liveItems = cart.items.filter((item) => {
+    return item.id.startsWith("dummyjson:") || item.source === "dummyjson";
+  });
+
+  if (liveItems.length === 0) {
+    const isOverlay = cart.items.some(
+      (item) => item.id.startsWith("overlay:") || item.source === "demo-overlay"
+    );
+    const reason = isOverlay
+      ? "Exempt: demo-overlay product is not present on live catalogue"
+      : "Exempt: mock product is verified against internal seed";
+    return {
+      name: "price_verified",
+      passed: true,
+      reason,
+      confidence: 1.0
+    };
+  }
+
+  for (const item of liveItems) {
+    try {
+      const liveProduct = await catalog.getById(item.id);
+      if (!liveProduct) {
+        return {
+          name: "price_verified",
+          passed: true,
+          reason: `Not verifiable: live catalogue item ${item.id} could not be retrieved`,
+          confidence: 0.5
+        };
+      }
+
+      if (liveProduct.priceCents !== item.priceCents) {
+        return {
+          name: "price_verified",
+          passed: false,
+          reason: `Price mismatch: cart price $${(item.priceCents / 100).toFixed(2)} does not match live catalogue price $${(liveProduct.priceCents / 100).toFixed(2)}`,
+          confidence: 1.0
+        };
+      }
+    } catch {
+      return {
+        name: "price_verified",
+        passed: true,
+        reason: "Not verifiable: live catalogue is unreachable",
+        confidence: 0.5
+      };
+    }
+  }
+
+  return {
+    name: "price_verified",
+    passed: true,
+    reason: `Price verified: $${(cart.totalCents / 100).toFixed(2)} matches live catalogue`,
+    confidence: 1.0
   };
 };

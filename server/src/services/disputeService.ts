@@ -21,6 +21,10 @@ export class DisputeService {
     const purchase = this.repos.purchases.getById(purchaseId);
     if (!purchase) throw new Error(`Purchase ${purchaseId} not found`);
 
+    if (purchase.capturedAmountCents <= 0) {
+      throw new Error("Cannot open a dispute on a purchase with no captured amount");
+    }
+
     const id = crypto.randomUUID();
     const paypalDisputeId = `SIM_DISPUTE_${Date.now()}`;
     const now = new Date().toISOString();

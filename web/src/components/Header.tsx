@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ShieldCheck, Moon, Sun, SlidersHorizontal } from "lucide-react";
+import { LiveBadges } from "./LiveBadges.js";
 
 interface HeaderProps {
   theme: "light" | "dark";
@@ -23,10 +24,12 @@ export const Header: React.FC<HeaderProps> = ({ theme, onToggleTheme, onOpenDraw
       style={{
         background: "var(--bg-surface)",
         borderBottom: "1px solid var(--border)",
-        padding: "12px 24px",
+        padding: "10px 24px",
         display: "flex",
         alignItems: "center",
-        justifyContent: "space-between"
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+        gap: "12px"
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
@@ -66,6 +69,8 @@ export const Header: React.FC<HeaderProps> = ({ theme, onToggleTheme, onOpenDraw
           })}
         </nav>
       </div>
+
+      <LiveBadges />
 
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         <button
