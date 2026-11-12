@@ -1,5 +1,6 @@
 import { Router } from "express";
 import type { Container } from "../../container.js";
+import { env } from "../../config/env.js";
 
 export const createLedgerRouter = (container: Container): Router => {
   const router = Router();
@@ -27,6 +28,10 @@ export const createLedgerRouter = (container: Container): Router => {
 
   // POST /api/ledger/:seq/tamper
   router.post("/:seq/tamper", (req, res, next) => {
+    if (!env.DEMO_MODE) {
+      res.status(404).end();
+      return;
+    }
     try {
       const seq = parseInt(req.params.seq, 10);
       ledger.tamper(seq);

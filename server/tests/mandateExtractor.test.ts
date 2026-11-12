@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ParseMandateRequestSchema } from "@agentledger/shared";
 import { extractMandateRules } from "../src/agents/index.js";
 
 describe("extractMandateRules", () => {
@@ -47,5 +48,14 @@ describe("extractMandateRules", () => {
       attributes: ["black"],
       category: "sneakers"
     });
+  });
+
+  it("rejects prompt with 501 characters and accepts 500 characters", () => {
+    const valid500 = "a".repeat(500);
+    expect(ParseMandateRequestSchema.safeParse({ prompt: valid500 }).success).toBe(true);
+
+    const invalid501 = "a".repeat(501);
+    const result = ParseMandateRequestSchema.safeParse({ prompt: invalid501 });
+    expect(result.success).toBe(false);
   });
 });

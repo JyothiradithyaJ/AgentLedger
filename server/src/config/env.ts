@@ -44,6 +44,8 @@ const EnvSchema = z.object({
   CATALOG_PROVIDER: z.enum(["mock", "dummyjson"]).default("mock"),
   DISPUTE_MODE: z.enum(["simulated", "sandbox"]).default("simulated"),
   USE_AGENT_TOOLKIT: z.enum(["true", "false"]).transform((v) => v === "true").default("false"),
+  DEMO_MODE: z.enum(["true", "false"]).transform((v) => v === "true").default("false"),
+  FRONTEND_URL: z.string().url().or(z.literal("")).default(""),
   DATABASE_PATH: z.string().default("data/agentledger.db"),
   KEYS_DIR: z.string().default("data/keys")
 });

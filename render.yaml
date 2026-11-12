@@ -6,6 +6,8 @@ services:
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start
     envVars:
+      - key: NODE_VERSION
+        value: "22"
       - key: NODE_ENV
         value: production
       - key: PORT
@@ -21,6 +23,10 @@ services:
       - key: PAYPAL_CLIENT_SECRET
         sync: false
       - key: GEMINI_API_KEY
+        sync: false
+      - key: DEMO_MODE
+        sync: false
+      - key: FRONTEND_URL
         sync: false
       - key: GEMINI_MODEL
         value: gemini-3.6-flash

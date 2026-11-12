@@ -48,12 +48,11 @@ Are there any violations of fuzzy constraints (e.g. secondhand, resale, style, u
       confidence: result.confidence
     };
   } catch {
-    // Graceful fallback to passing with low confidence or requesting human review
     return {
       name: "semantic_intent",
-      passed: true,
-      reason: "Semantic check skipped due to provider limits; falling back to deterministic rules. [AI fallback: mock]",
-      confidence: 0.6
+      passed: false,
+      reason: "Semantic check unavailable; blocked pending review.",
+      confidence: 0
     };
   }
 };

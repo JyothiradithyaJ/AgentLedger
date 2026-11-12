@@ -51,8 +51,9 @@ export class PayPalAdapter implements PayPalPort {
   }
 
   async getAuthorization(authorizationId: string): Promise<AuthorizationDetails> {
-    if (env.PAYPAL_MODE === "mock" || authorizationId.startsWith("MOCK_")) {
+    if (env.PAYPAL_MODE === "mock") {
       logger.info({ authorizationId }, "MOCK PayPal getAuthorization invoked");
+      // SIMULATED/MOCK: Hardcoded authorization details used strictly in mock mode
       return {
         authorizationId,
         status: "CAPTURED",

@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { env } from "../config/env.js";
 import { logger } from "../observability/logger.js";
 
@@ -33,19 +34,19 @@ export const initDb = (dbPath: string = env.DATABASE_PATH): DatabaseSync => {
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
 
-  const migrationPath = path.join(
-    path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")),
-    "migrations",
-    "001_init.sql"
-  );
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  const candidatePaths = [
+    path.join(currentDir, "migrations", "001_init.sql"),
+    path.resolve(currentDir, "../../../src/repos/migrations/001_init.sql"),
+    path.resolve(process.cwd(), "server/src/repos/migrations/001_init.sql"),
+    path.resolve(process.cwd(), "src/repos/migrations/001_init.sql")
+  ];
 
-  let migrationSql = "";
-  if (fs.existsSync(migrationPath)) {
-    migrationSql = fs.readFileSync(migrationPath, "utf-8");
-  } else {
-    const altPath = path.resolve(process.cwd(), "server/src/repos/migrations/001_init.sql");
-    migrationSql = fs.readFileSync(altPath, "utf-8");
+  const migrationPath = candidatePaths.find((p) => fs.existsSync(p));
+  if (!migrationPath) {
+    throw new Error(`Migration 001_init.sql not found in candidate paths: ${candidatePaths.join(", ")}`);
   }
+  const migrationSql = fs.readFileSync(migrationPath, "utf-8");
 
   db.exec(migrationSql);
   logger.info({ dbPath }, "Native Node SQLite database initialized with migrations");

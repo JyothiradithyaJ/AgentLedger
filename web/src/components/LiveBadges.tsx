@@ -96,9 +96,15 @@ export const LiveBadges: React.FC<LiveBadgesProps> = ({ className, style }) => {
       </span>
 
       {/* LIVE Chips */}
-      <span style={liveChipStyle} title="Live PayPal Sandbox REST API">
-        <Activity size={12} /> PayPal Sandbox
-      </span>
+      {config?.paypalMode === "sandbox" ? (
+        <span style={liveChipStyle} title="Live PayPal Sandbox REST API">
+          <Activity size={12} /> PayPal Sandbox
+        </span>
+      ) : (
+        <span style={warnChipStyle} title="Simulated PayPal Mock Adapter">
+          <AlertCircle size={12} /> PayPal MOCK
+        </span>
+      )}
 
       {isLiveCatalog ? (
         <span style={liveChipStyle} title="Live Catalog: DummyJSON API">

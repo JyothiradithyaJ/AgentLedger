@@ -6,6 +6,8 @@ import type { LLMPort } from "../ports/llm.port.js";
 import type { CatalogPort } from "../ports/catalog.port.js";
 import { MockCatalogAdapter } from "../adapters/catalog/index.js";
 import type { LedgerService } from "./ledgerService.js";
+import { env } from "../config/env.js";
+import { AppError } from "../http/middleware/errorHandler.js";
 import type {
   PurchaseRecord,
   ProposedCart,
@@ -46,14 +48,7 @@ export class PurchaseService {
     const now = new Date().toISOString();
 
     const emit = (step: RunTimelineEvent["step"], message: string, cart?: ProposedCart, p?: PurchaseRecord) => {
-      onTimelineEvent?.({
-        runId,
-        timestamp: new Date().toISOString(),
-        step,
-        message,
-        cart,
-        purchase: p
-      });
+      onTimelineEvent?.({ runId, timestamp: new Date().toISOString(), step, message, cart, purchase: p });
     };
 
     emit("STARTED", `Shopping agent initialized inside mandate (${mandate.description})`);
@@ -97,13 +92,7 @@ export class PurchaseService {
     // 2. Referee Evaluation (unless bypassed for counterfactual scenario E)
     let decision: RefereeDecision;
     if (bypassReferee) {
-      decision = {
-        allowed: true,
-        requiresHuman: false,
-        reasons: ["Referee bypassed via demo toggle."],
-        checks: [],
-        evaluatedAt: new Date().toISOString()
-      };
+      decision = { allowed: true, requiresHuman: false, reasons: ["Referee bypassed via demo toggle."], checks: [], evaluatedAt: new Date().toISOString() };
     } else {
       purchase = transitionPurchase(purchase, "CHECKING");
       emit("REFEREE_EVALUATING", "Referee running deterministic checks (budget, merchant, size, quantity)...");
@@ -129,22 +118,12 @@ export class PurchaseService {
       }
 
       const allPassed = rules.passed && semanticCheckPassed;
-      decision = {
-        allowed: allPassed,
-        requiresHuman: false,
-        reasons: rules.reasons,
-        checks: rules.checks,
-        evaluatedAt: new Date().toISOString()
-      };
+      decision = { allowed: allPassed, requiresHuman: false, reasons: rules.reasons, checks: rules.checks, evaluatedAt: new Date().toISOString() };
     }
 
     purchase = { ...purchase, refereeDecision: decision };
     this.ledger.recordEvent("REFEREE_EVALUATED", mandate.id, {
-      runId,
-      purchaseId,
-      allowed: decision.allowed,
-      reasons: decision.reasons,
-      checks: decision.checks
+      runId, purchaseId, allowed: decision.allowed, reasons: decision.reasons, checks: decision.checks
     });
 
     // 3. Execution or Block
@@ -164,13 +143,26 @@ export class PurchaseService {
     }
 
     emit("REFEREE_PASSED", "Referee PASSED cart. Initiating PayPal partial capture...", cart, purchase);
+    purchase = transitionPurchase(purchase, "ALLOWED");
 
     // 4. Capture on PayPal Rail with Reconciliation
     emit("PAYPAL_CAPTURING", `Executing partial capture for $${(cart.totalCents / 100).toFixed(2)} on hold...`);
 
-    const authId = mandate.paypalAuthorizationId ?? "MOCK_AUTH_DEFAULT";
-    const requestId = purchase.id;
+    let authId = mandate.paypalAuthorizationId;
+    if (!authId) {
+      if (env.PAYPAL_MODE === "mock") {
+        authId = "MOCK_AUTH_DEFAULT";
+      } else {
+        throw new AppError(
+          "UNAUTHORIZED_MANDATE",
+          409,
+          "This mandate has no approved PayPal authorization.",
+          { mandateId: mandate.id }
+        );
+      }
+    }
 
+    const requestId = purchaseId;
     let captureResult: CaptureResult;
     try {
       captureResult = await this.captureOrReconcile(
@@ -189,7 +181,6 @@ export class PurchaseService {
 
     const releasedCents = mandate.heldCents - captureResult.capturedCents;
 
-    purchase = transitionPurchase(purchase, "ALLOWED");
     purchase = transitionPurchase(purchase, "CAPTURED");
     purchase = {
       ...purchase,
@@ -243,24 +234,29 @@ export class PurchaseService {
         requestId,
         true
       );
-    } catch (captureErr) {
+    } catch (captureErr: unknown) {
+      const errDetails = captureErr instanceof AppError ? captureErr.details : undefined;
       const errMsg = captureErr instanceof Error ? captureErr.message : String(captureErr);
-      const isAlreadyCaptured = errMsg.includes("AUTHORIZATION_ALREADY_CAPTURED") || errMsg.includes("422");
+      const isAlreadyCaptured =
+        errMsg.includes("AUTHORIZATION_ALREADY_CAPTURED") ||
+        JSON.stringify(errDetails ?? "").includes("AUTHORIZATION_ALREADY_CAPTURED");
 
-      if (isAlreadyCaptured || authId) {
-        try {
-          const authDetails = await this.paypal.getAuthorization(authId);
-          if (authDetails.status === "CAPTURED" || authDetails.status === "PARTIALLY_CAPTURED") {
-            const capturedAmount = authDetails.amountCents > 0 ? authDetails.amountCents : cartTotalCents;
-            return {
-              captureId: `reconciled_${requestId}`,
-              status: authDetails.status,
-              capturedCents: capturedAmount
-            };
-          }
-        } catch {
-          // Re-throw original capture error if reconciliation lookup fails
+      if (!isAlreadyCaptured) {
+        throw captureErr;
+      }
+
+      try {
+        const authDetails = await this.paypal.getAuthorization(authId);
+        if (authDetails.status === "CAPTURED") {
+          const capturedAmount = authDetails.amountCents > 0 ? authDetails.amountCents : cartTotalCents;
+          return {
+            captureId: `reconciled_${requestId}`,
+            status: authDetails.status,
+            capturedCents: capturedAmount
+          };
         }
+      } catch {
+        // Fall through to rethrow captureErr
       }
 
       throw captureErr;

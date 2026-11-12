@@ -16,10 +16,12 @@ import { createDisputesRouter } from "./routes/disputes.js";
 import { createWebhooksRouter } from "./routes/webhooks.js";
 import { createDemoRouter } from "./routes/demo.js";
 import { createHealthRouter } from "./routes/health.js";
-import { getPublicConfig } from "../config/env.js";
+import { env, getPublicConfig } from "../config/env.js";
 
 export const createApp = (container: Container = createContainer()): Express => {
   const app = express();
+
+  app.set("trust proxy", 1);
 
   // Basic security and parsing middleware
   app.use(
@@ -27,12 +29,28 @@ export const createApp = (container: Container = createContainer()): Express => 
       contentSecurityPolicy: {
         directives: {
           ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-          "img-src": ["'self'", "data:", "https:"]
+          "script-src": ["'self'", "https://*.paypal.com", "https://*.paypalobjects.com"],
+          "connect-src": ["'self'", "https://*.paypal.com", "https://*.paypalobjects.com"],
+          "frame-src": ["'self'", "https://*.paypal.com"],
+          "img-src": ["'self'", "data:", "https://*.paypal.com", "https://*.paypalobjects.com"]
         }
       }
     })
   );
-  app.use(cors());
+
+  const allowedOrigins: string[] = [];
+  if (env.FRONTEND_URL) {
+    allowedOrigins.push(env.FRONTEND_URL.replace(/\/$/, ""));
+  }
+  if (env.NODE_ENV !== "production") {
+    allowedOrigins.push("http://localhost:5173");
+  }
+
+  app.use(
+    cors({
+      origin: allowedOrigins.length > 0 ? allowedOrigins : false
+    })
+  );
   app.use(express.json({ limit: "1mb" }));
   app.use(createRequestLogger());
   app.use("/api/", apiRateLimiter);

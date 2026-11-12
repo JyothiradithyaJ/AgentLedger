@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { PayPalClient } from "./client.js";
 import type { AuthorizeResult, AuthorizationDetails, CaptureResult } from "../../ports/paypal.port.js";
 
@@ -37,15 +38,6 @@ interface PayPalCaptureResponse {
   };
 }
 
-interface PayPalGetAuthResponse {
-  id?: string;
-  status?: string;
-  amount?: {
-    value?: string;
-    currency_code?: string;
-  };
-}
-
 export const authorizeOrder = async (
   client: PayPalClient,
   orderId: string
@@ -69,20 +61,29 @@ export const authorizeOrder = async (
   };
 };
 
+const PayPalGetAuthResponseSchema = z.object({
+  id: z.string().min(1),
+  status: z.string().min(1),
+  amount: z
+    .object({
+      value: z.string().optional(),
+      currency_code: z.string().optional()
+    })
+    .optional()
+});
+
 export const getAuthorization = async (
   client: PayPalClient,
   authorizationId: string
 ): Promise<AuthorizationDetails> => {
-  const response = await client.request<PayPalGetAuthResponse>(
+  const raw = await client.request<unknown>(
     `/v2/payments/authorizations/${authorizationId}`,
     {
       method: "GET"
     }
   );
 
-  if (!response || typeof response !== "object" || !response.id || !response.status) {
-    throw new Error(`PayPal getAuthorization response missing required fields for ${authorizationId}`);
-  }
+  const response = PayPalGetAuthResponseSchema.parse(raw);
 
   let amountCents = 0;
   const rawValue = response.amount?.value;

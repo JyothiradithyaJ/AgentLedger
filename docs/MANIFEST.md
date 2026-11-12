@@ -202,7 +202,7 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 - **Exports**: `DummyJsonCatalogAdapter`, `MockCatalogAdapter`, `ResilientCatalogAdapter`, `createCatalogAdapter`
 
 ### `server/src/repos/db.ts`
-- **Imports**: `node:sqlite`, `node:fs`, `node:path`, `../config/env.js`
+- **Imports**: `node:module`, `node:sqlite`, `node:fs`, `node:path`, `node:url`, `../config/env.js`, `../observability/logger.js`
 - **Exports**: `getDb`, `initDb`
 
 ### `server/src/repos/mandateRepo.ts`
@@ -409,6 +409,10 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 
 ### `server/tests/liveCatalogShopper.test.ts`
 - **Imports**: `vitest`, `@shared`, `../src/agents/shopper.js`, `../src/domain/rules/referee.js`, `../src/ports/catalog.port.js`, `../src/ports/llm.port.js`, `../src/ports/merchant.port.js`
+- **Exports**: None
+
+### `server/tests/hardening.test.ts`
+- **Imports**: `vitest`, `@shared`, `../src/container.js`, `../src/http/app.js`, `../src/config/env.js`, `../src/agents/refereeAI.js`
 - **Exports**: None
 
 ### `web/src/lib/checkStatus.test.ts`

@@ -5,6 +5,7 @@ import {
 } from "@agentledger/shared";
 import type { Container } from "../../container.js";
 import { sseManager } from "../sse.js";
+import { env } from "../../config/env.js";
 
 export const createMandatesRouter = (container: Container): Router => {
   const router = Router();
@@ -116,7 +117,7 @@ export const createMandatesRouter = (container: Container): Router => {
         }
       }
       const rawBypass = typeof req.body === "object" && req.body !== null ? Reflect.get(req.body, "bypassReferee") : undefined;
-      const bypass = Boolean(rawBypass);
+      const bypass = env.DEMO_MODE === true && rawBypass === true;
 
       // Async execution with timeline events broadcasting over SSE
       const runPromise = purchases.executeAgentRun(

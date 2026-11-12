@@ -42,7 +42,7 @@ export const MandateSchema = z.object({
 export type Mandate = z.infer<typeof MandateSchema>;
 
 export const ParseMandateRequestSchema = z.object({
-  prompt: z.string().min(1)
+  prompt: z.string().min(1).max(500)
 });
 export type ParseMandateRequest = z.infer<typeof ParseMandateRequestSchema>;
 
