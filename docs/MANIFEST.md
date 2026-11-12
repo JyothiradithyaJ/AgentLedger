@@ -322,7 +322,7 @@ Contract first: every file in AgentLedger, its exported symbols, and its import 
 - **Exports**: `healthRouter`
 
 ### `server/src/http/app.ts`
-- **Imports**: `express`, `helmet`, `cors`, `../container.js`
+- **Imports**: `express`, `helmet`, `cors`, `node:path`, `node:fs`, `node:url`, `../container.js`
 - **Exports**: `createApp`
 
 ### `server/src/index.ts`

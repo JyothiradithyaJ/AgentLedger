@@ -21,19 +21,21 @@ HARDENING-FIXES: Applied all 11 security hardening, payment reconciliation, safe
 - `shared/schemas/mandate.ts` (Fix 11): Added `.max(500)` boundary validation to `ParseMandateRequestSchema.prompt`.
 - `server/tests/mandateExtractor.test.ts` (Fix 11 test): Added unit test asserting 500-character prompts pass and 501-character prompts are rejected.
 - `server/src/repos/db.ts` (DEC-018): Added cross-environment multi-candidate path resolver for `001_init.sql` using `fileURLToPath(import.meta.url)` that resolves migrations whether executed via `tsx` or `node dist/src/index.js` from the repository root or the `server/` directory.
+- `server/src/http/app.ts` (DEC-019): Added multi-candidate path resolver for static `web/dist` SPA assets so Express mounts static files when `process.cwd()` is `server/` or the repository root.
 - `server/tests/hardening.test.ts` (Fix 4a, Fix 5, Fix 6, Fix 7, Fix 8 tests): Created dedicated integration suite testing capture error rethrowing, missing authorization rejection, referee enforcement when `DEMO_MODE=false`, semantic fail-closed fallback, and 404 gating for `/reset` and `/tamper`; verified non-capture ledger event counts accurately (`ledgerCountBefore + 2`).
-- `docs/MANIFEST.md`: Registered `server/tests/hardening.test.ts` and updated `db.ts` imports with `node:url` and `node:module`.
-- `docs/DECISIONS.md`: Recorded `DEC-016` (409 Conflict for missing mandate authorization), `DEC-017` (CORS allowlist with Vite dev origin fallback), and `DEC-018` (Multi-candidate migration path resolver).
+- `docs/MANIFEST.md`: Registered `server/tests/hardening.test.ts` and updated `db.ts` and `app.ts` imports.
+- `docs/DECISIONS.md`: Recorded `DEC-016`, `DEC-017`, `DEC-018`, and `DEC-019`.
 
 ## 3. Manifest Changes
 Added entry under Section 4 (`server/tests/`):
 - `server/tests/hardening.test.ts`: Imports `vitest`, `@shared`, `../src/container.js`, `../src/http/app.js`, `../src/config/env.js`, `../src/agents/refereeAI.js`; Exports: None.
-Updated `server/src/repos/db.ts` to document `node:url` and `node:module` imports.
+Updated `server/src/repos/db.ts` and `server/src/http/app.ts` to document `node:url` and filesystem path imports.
 
 ## 4. Decisions Made
-- `DEC-016`: 409 Conflict on missing mandate authorization in non-mock mode (indicates unapproved or unheld mandate state conflict rather than malformed request).
-- `DEC-017`: CORS origin allowlist with Vite dev origin fallback in non-production (`http://localhost:5173` permitted when `NODE_ENV !== "production"`).
-- `DEC-018`: Multi-candidate migration path resolver in `db.ts` supporting execution from both repository root and `server/` directory.
+- `DEC-016`: 409 Conflict on missing mandate authorization in non-mock mode.
+- `DEC-017`: CORS origin allowlist with Vite dev origin fallback in non-production.
+- `DEC-018`: Multi-candidate migration path resolver in `db.ts`.
+- `DEC-019`: Multi-candidate static `web/dist` path resolver in `app.ts` enabling React SPA serving on `/` across monorepo and workspace runtime working directories.
 
 ## 5. YOU RUN
 Execute the following commands in order in Windows cmd:

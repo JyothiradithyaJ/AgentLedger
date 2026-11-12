@@ -3,6 +3,7 @@ import helmet from "helmet";
 import cors from "cors";
 import path from "node:path";
 import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { createContainer, type Container } from "../container.js";
 import { createRequestLogger } from "../observability/logger.js";
 import { apiRateLimiter } from "./middleware/rateLimit.js";
@@ -69,8 +70,15 @@ export const createApp = (container: Container = createContainer()): Express => 
   app.use("/api", createHealthRouter(container));
 
   // Production static serving for built React SPA (web/dist)
-  const distPath = path.resolve(process.cwd(), "web/dist");
-  if (fs.existsSync(distPath)) {
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  const candidateDistPaths = [
+    path.resolve(process.cwd(), "web/dist"),
+    path.resolve(process.cwd(), "../web/dist"),
+    path.resolve(currentDir, "../../../../web/dist"),
+    path.resolve(currentDir, "../../../web/dist")
+  ];
+  const distPath = candidateDistPaths.find((p) => fs.existsSync(p));
+  if (distPath) {
     app.use(express.static(distPath));
     app.get("*", (req, res, next) => {
       if (req.path.startsWith("/api")) return next();
