@@ -27,7 +27,8 @@ HARDENING-FIXES: Applied all 11 security hardening, payment reconciliation, safe
 - `server/src/adapters/catalog/dummyJsonCatalog.ts` (DEC-020): Added keyword fallback search when a multi-word query returns 0 results from DummyJSON's API so brand and product keywords resolve to real items. File size: 226 lines.
 - `server/src/agents/mandateExtractor.ts`: Cleaned up merchant restriction adverb stripping so terms like "strictly avoid" do not leave words like "strictly" inside extracted category text. File size: 121 lines.
 - `server/src/agents/shopper.ts`: Added over-budget candidate keyword retry in Scenario B and keyword fallback in compliant search so live DummyJSON items are selected instead of falling back to mock carts. File size: 296 lines (<300 limit).
-- `docs/DECISIONS.md`: Recorded `DEC-016`, `DEC-017`, `DEC-018`, `DEC-019`, and `DEC-020`.
+- `server/src/adapters/catalog/resilientCatalog.ts` (DEC-021): Added unconstrained fallback search on primary catalogue before delegating to mock catalog, ensuring real items above budget are retrieved from DummyJSON rather than inventing synthetic mock items. File size: 65 lines.
+- `docs/DECISIONS.md`: Recorded `DEC-016`, `DEC-017`, `DEC-018`, `DEC-019`, `DEC-020`, and `DEC-021`.
 
 ## 3. Manifest Changes
 Added entry under Section 4 (`server/tests/`):
@@ -40,6 +41,7 @@ Updated `server/src/repos/db.ts` and `server/src/http/app.ts` to document `node:
 - `DEC-018`: Multi-candidate migration path resolver in `db.ts`.
 - `DEC-019`: Multi-candidate static `web/dist` path resolver in `app.ts` enabling React SPA serving on `/` across monorepo and workspace runtime working directories.
 - `DEC-020`: Multi-word keyword fallback in `DummyJsonCatalogAdapter` and `shopper.ts` prioritizing live DummyJSON products over mock fallbacks.
+- `DEC-021`: Unconstrained fallback in `ResilientCatalogAdapter` preserving live DummyJSON items over synthetic mock products when items exceed budget.
 
 ## 5. YOU RUN
 Execute the following commands in order in Windows cmd:

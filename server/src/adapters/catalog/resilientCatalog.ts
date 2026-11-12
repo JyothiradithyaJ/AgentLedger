@@ -24,6 +24,13 @@ export class ResilientCatalogAdapter implements CatalogPort {
         this.currentLastSource = "dummyjson";
         return results;
       }
+      if (options.maxPriceCents !== undefined) {
+        const unconstrained = await this.primary.search({ ...options, maxPriceCents: undefined });
+        if (unconstrained.length > 0) {
+          this.currentLastSource = "dummyjson";
+          return unconstrained;
+        }
+      }
       logger.warn({ options }, "Primary catalog search returned 0 results. Falling back to mock catalog.");
       this.currentLastSource = "mock";
       return await this.fallback.search(options);
