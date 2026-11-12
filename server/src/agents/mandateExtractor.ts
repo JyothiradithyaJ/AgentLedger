@@ -57,8 +57,8 @@ const extractSize = (text: string): string | undefined => {
 const extractMerchantDeny = (text: string): string[] => {
   const denied: string[] = [];
   const patterns = [
-    /\bnot\s+from\s+([^,.!;]+)/gi,
-    /\bavoid\s+([^,.!;]+)/gi,
+    /\b(?:strictly\s+)?not\s+from\s+([^,.!;]+)/gi,
+    /\b(?:strictly\s+)?avoid\s+([^,.!;]+)/gi,
     /\bexcept\s+([^,.!;]+)/gi,
     /\bwithout\s+([^,.!;]+)/gi
   ];
@@ -90,14 +90,14 @@ const deriveCategory = (text: string): string | undefined => {
     .replace(new RegExp(`\\(?\\b(?:in\\s+)?(?:size|sz)(?:\\s+(?:should\\s+be|is))?\\s*:?\\s*${SIZE_VALUE}\\)?`, "gi"), " ")
     .replace(/\b(?:UK|US|EU)\s*\d+(?:\.\d+)?\b/gi, " ")
     .replace(new RegExp(`\\b${SIZE_VALUE}\\s+size\\b`, "gi"), " ")
-    .replace(/\b(?:not\s+from|avoid|except|without)\s+[^,.!;]+|\bno\s+resale(?:\s+(?:sites?|shops?|stores?|marketplaces?))?\b/gi, " ");
+    .replace(/\b(?:strictly\s+)?(?:not\s+from|avoid|except|without)\s+[^,.!;]+|\bno\s+resale(?:\s+(?:sites?|shops?|stores?|marketplaces?))?\b/gi, " ");
   BUDGET_PATTERN.lastIndex = 0;
 
   const withoutColors = COLORS.reduce((value, color) => {
     return value.replace(new RegExp(`\\b${color}\\b`, "gi"), " ");
   }, withoutConstraints);
   const category = withoutColors
-    .replace(/\b(?:buy|get|find|purchase|i want|need|for me|please|a|an|the|and|with|in|me|for|dollars?|bucks?|usd)\b/gi, " ")
+    .replace(/\b(?:buy|get|find|purchase|i want|need|for me|please|a|an|the|and|with|in|me|for|dollars?|bucks?|usd|strictly)\b/gi, " ")
     .replace(/[,.;:!()?"]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();

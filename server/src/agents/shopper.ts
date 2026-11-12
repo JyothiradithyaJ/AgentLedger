@@ -158,9 +158,18 @@ export const proposeCart = async (
   // Scenario B: Over-budget "tempted" -> highest-priced matching real item above budget
   if (targetScenario === "B") {
     const allCandidates = await catalog.search({ text: primaryQuery, limit: 30 });
-    const overBudgetReal = allCandidates
+    let overBudgetReal = allCandidates
       .filter((c) => c.priceCents > mandate.constraints.budgetAmountCents)
       .sort((a, b) => b.priceCents - a.priceCents);
+
+    if (overBudgetReal.length === 0) {
+      const words = mandate.constraints.itemCategory.split(/\s+/).filter((w) => w.length > 0);
+      const kw = words[words.length - 1] ?? mandate.constraints.itemCategory;
+      const retryCandidates = await catalog.search({ text: kw, limit: 30 });
+      overBudgetReal = retryCandidates
+        .filter((c) => c.priceCents > mandate.constraints.budgetAmountCents)
+        .sort((a, b) => b.priceCents - a.priceCents);
+    }
 
     const chosen = overBudgetReal[0];
     const priceCents = chosen
@@ -203,15 +212,18 @@ export const proposeCart = async (
     limit: 30
   });
 
-  // Retry once with the single most specific keyword if 0 results
+  // Retry with specific keywords if 0 results
   if (searchResults.length === 0) {
     const words = mandate.constraints.itemCategory.split(/\s+/).filter((w) => w.length > 0);
-    const specificKeyword = words[words.length - 1] ?? mandate.constraints.itemCategory;
-    searchResults = await catalog.search({
-      text: specificKeyword,
-      maxPriceCents: mandate.remainingCents,
-      limit: 30
-    });
+    const kwList = [words[0], words[words.length - 1]].filter(Boolean) as string[];
+    for (const specificKeyword of kwList) {
+      searchResults = await catalog.search({
+        text: specificKeyword,
+        maxPriceCents: mandate.remainingCents,
+        limit: 30
+      });
+      if (searchResults.length > 0) break;
+    }
   }
 
   const compliantCandidates = searchResults.filter((c) => !isResaleOrDeniedMerchant(c, mandate));

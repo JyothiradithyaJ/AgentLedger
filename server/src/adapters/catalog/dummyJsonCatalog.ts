@@ -140,52 +140,72 @@ export class DummyJsonCatalogAdapter implements CatalogPort {
     const limit = options.limit && options.limit > 0 ? options.limit : 30;
     const trimmedText = options.text.trim();
 
-    let endpointUrl = "";
-    if (trimmedText.length > 0) {
-      endpointUrl = `${this.baseUrl}/products/search?q=${encodeURIComponent(trimmedText)}&limit=${limit}`;
-    } else if (options.category && options.category.trim().length > 0) {
-      endpointUrl = `${this.baseUrl}/products/category/${encodeURIComponent(options.category.trim())}?limit=${limit}`;
-    } else {
-      endpointUrl = `${this.baseUrl}/products?limit=${limit}`;
-    }
-
-    try {
-      const responseData = await this.fetchWithRetryAndCache(endpointUrl);
-      if (!isObject(responseData) || !Array.isArray(responseData.products)) {
-        return [];
+    const fetchAndFilter = async (queryText: string): Promise<CatalogProduct[]> => {
+      let endpointUrl = "";
+      if (queryText.length > 0) {
+        endpointUrl = `${this.baseUrl}/products/search?q=${encodeURIComponent(queryText)}&limit=${limit}`;
+      } else if (options.category && options.category.trim().length > 0) {
+        endpointUrl = `${this.baseUrl}/products/category/${encodeURIComponent(options.category.trim())}?limit=${limit}`;
+      } else {
+        endpointUrl = `${this.baseUrl}/products?limit=${limit}`;
       }
 
-      const products: CatalogProduct[] = [];
-      for (const item of responseData.products) {
-        if (isObject(item) && "id" in item && "title" in item && "price" in item) {
-          const normalized = this.normalizeProduct(item);
+      try {
+        const responseData = await this.fetchWithRetryAndCache(endpointUrl);
+        if (!isObject(responseData) || !Array.isArray(responseData.products)) {
+          return [];
+        }
 
-          if (options.maxPriceCents !== undefined && normalized.priceCents > options.maxPriceCents) {
-            continue;
-          }
+        const products: CatalogProduct[] = [];
+        for (const item of responseData.products) {
+          if (isObject(item) && "id" in item && "title" in item && "price" in item) {
+            const normalized = this.normalizeProduct(item);
 
-          if (options.category && options.category.trim().length > 0) {
-            const cat = options.category.toLowerCase().trim();
-            const matchesCat = normalized.category.toLowerCase().includes(cat);
-            const matchesAttrs = normalized.attributes.some((a) => a.toLowerCase().includes(cat));
-            const matchesTitle = normalized.title.toLowerCase().includes(cat);
-            if (!matchesCat && !matchesAttrs && !matchesTitle) {
+            if (options.maxPriceCents !== undefined && normalized.priceCents > options.maxPriceCents) {
               continue;
             }
-          }
 
-          products.push(normalized);
+            if (options.category && options.category.trim().length > 0) {
+              const cat = options.category.toLowerCase().trim();
+              const matchesCat = normalized.category.toLowerCase().includes(cat);
+              const matchesAttrs = normalized.attributes.some((a) => a.toLowerCase().includes(cat));
+              const matchesTitle = normalized.title.toLowerCase().includes(cat);
+              if (!matchesCat && !matchesAttrs && !matchesTitle) {
+                continue;
+              }
+            }
+
+            products.push(normalized);
+          }
+        }
+        return products;
+      } catch {
+        return [];
+      }
+    };
+
+    let products = await fetchAndFilter(trimmedText);
+
+    if (products.length === 0 && trimmedText.includes(" ")) {
+      const words = trimmedText
+        .split(/\s+/)
+        .map((w) => w.replace(/[^a-zA-Z0-9]/g, "").trim())
+        .filter((w) => w.length >= 3);
+
+      for (const word of words) {
+        const keywordResults = await fetchAndFilter(word);
+        if (keywordResults.length > 0) {
+          products = keywordResults;
+          break;
         }
       }
-
-      if (options.limit && options.limit > 0 && products.length > options.limit) {
-        return products.slice(0, options.limit);
-      }
-
-      return products;
-    } catch {
-      return [];
     }
+
+    if (options.limit && options.limit > 0 && products.length > options.limit) {
+      return products.slice(0, options.limit);
+    }
+
+    return products;
   }
 
   async getById(id: string): Promise<CatalogProduct | null> {
